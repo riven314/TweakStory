@@ -18,6 +18,8 @@
 Tweak Story is an open-source project towards generating controllable Instagram captions, powered by PyTorch, Transformers and Streamlit. We apply attention-based condition LSTM network to generate engaging captions that can be tweaked by our users. With different attributes we offer, user can easily mix and match different combination of attributes for their own flavor. In current stage, we offer sentence length and emoji flag as available attributes. 
 
 ## Demo
+You can find an online version of [Tweak Story here](http://tweakstory.stefanmesken.info/).
+
 <div align="center">
   <img alt="demo" src="assets/demo.gif" width="100%">
 </div>
@@ -46,33 +48,16 @@ cd stylised-controllable-image-captioning-StreamlitApp
 
 Build and run the docker image locally:
 ```
-docker build -t ctrl-img-cap-streamlit:latest .
-docker run -d -p 8501:8501 ctrl-img-cap-streamlit:latest
+make run
 ```
 Navigate to http://localhost:8501 for the app. (Streamlit runs on port 8501 by default)
 
+Shutdown the server:
+```
+make stop 
+```
+
 *Note : When you'll run the container for the first time it will download a resnet101 model. The Streamlit app is run in CPU.*
-
-## Install and Run in Conda (Alternative)
-Clone the repo and navigate to the repo directory:
-```
-git clone https://github.com/namanphy/stylised-controllable-image-captioning-StreamlitApp.git
-cd stylised-controllable-image-captioning-StreamlitApp
-```
-
-Make a python3.6 conda environment and install requirements:
-```
-conda create -n app-env python=3.6
-pip install -r requirements.txt
-```
-
-Run below command to launch the Streamlit app:
-```
-conda activate app-env
-streamlit run app.py
-```
-
-Navigate to http://localhost:8501 for the app.
 
 ## Run Unit Test
 ```
@@ -82,7 +67,7 @@ pytest -s tests
 ## About This Project
 This project is a part of [Data Science Incubator (Summer 2020)](https://madewithml.com/incubator/) organized by Made With ML, jointly developed by [Alex Lau](https://madewithml.com/@riven314/) and [Naman Bhardwaj](https://madewithml.com/@namanphy/). We constantly look for better generation quality and deployment strategy. We welcome your contributions and please contact us if you do!
 
-## Acknowledgement
+## Acknowledgements
 Our work is mainly based upon the following published research:
 ```
 @article{Xu2015show,
