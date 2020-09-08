@@ -1,13 +1,15 @@
+import logging
 import pathlib
-from typing import Any, Optional, Tuple
-
-import bpemb                                                # type: ignore
-import h5py                                                 # type: ignore
-import numpy                                                # type: ignore
-import PIL                                                  # type: ignore
-import torch
-import torchvision                                          # type: ignore
 import re
+from typing import Any, List, Optional, Tuple
+
+import bpemb  # type: ignore
+import h5py  # type: ignore
+import numpy  # type: ignore
+import PIL  # type: ignore
+import torch
+import torchvision  # type: ignore
+import tqdm  # type: ignore
 
 from utils import create_pad_collate, log_init
 
@@ -20,6 +22,10 @@ class Trainer:
     @log_init
     def __init__(
         self,
+        pad_token_id: int = 0,
+        unk_token_id: int = 0,
+        batch_size: int = 16,
+        max_epochs: int = 100,
         device: torch.device = torch.device("cpu")
     ):
         """
@@ -27,21 +33,30 @@ class Trainer:
 
         TODO: update
         """
-        self.unk_token_id = 0
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.batch_size = batch_size
+        self.pad_token_id = pad_token_id
+        self.unk_token_id = unk_token_id
+        self.max_epochs = max_epochs
         self.device = device
         self.dataset = IGDataset()
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
-            batch_size=4,
+            batch_size=self.batch_size,
             shuffle=True,
-            num_workers=0,
-            collate_fn=create_pad_collate(pad_token_id=0)
+            num_workers=1,
+            collate_fn=create_pad_collate(pad_token_id=self.pad_token_id),
+            pin_memory=True
         )
-        self.model = ShowAttendTell(device)
-        self.model.to(self.device)
+        self.model = ShowAttendTell()
+        self.model.to(
+            self.device
+        )
         self.criterion = torch.nn.NLLLoss(
             ignore_index=self.unk_token_id,
             reduction="mean"
+        ).to(
+            self.device
         )
         self.optimizer = torch.optim.Adam(self.model.parameters())
 
@@ -51,25 +66,40 @@ class Trainer:
 
         return: None
         """
+        self.logger.info("Training model.")
 
-        for x in self.dataloader:
-            self.optimizer.zero_grad()
-            images, captions = x
-            images = images.to(self.device)
-            captions = captions.to(self.device)
-            prediction = self.model(images, captions)
-            loss = 0
-            padded_length = captions.size(1)
+        epoch_loss = 0.
+        epoch_length = 0
 
-            for index in range(1, padded_length):
-                loss += self.criterion(
-                    prediction[:, index, :],
-                    captions[:, index]
-                )
+        for epoch in range(1, self.max_epochs + 1):
+            epoch_loss = 0.
+            epoch_length = 0
+            self.logger.info(f"Starting epoch: {epoch}")
 
-            loss.backward()
-            self.optimizer.step()
-            print(loss)
+            for x in tqdm.tqdm(self.dataloader):
+                self.optimizer.zero_grad()
+                images, captions = x
+                images = images.to(self.device)
+                captions = captions.to(self.device)
+                prediction = self.model(images, captions)
+                loss = 0
+                padded_length = captions.size(1)
+
+                for index in range(1, padded_length):
+                    loss += self.criterion(
+                        prediction[:, index, :],
+                        captions[:, index]
+                    )
+
+                loss.backward()                                 # type: ignore
+                self.optimizer.step()
+                epoch_loss += loss.item()                       # type: ignore
+                epoch_length += 1
+
+            epoch_loss /= epoch_length
+            self.logger.info(
+                f"Epoch: {epoch:>4} Training Loss: {epoch_loss:4.2f}"
+            )
 
 
 class ShowAttendTell(torch.nn.Module):
@@ -79,20 +109,14 @@ class ShowAttendTell(torch.nn.Module):
     See: https://arxiv.org/abs/1502.03044
     """
 
-    def __init__(
-        self,
-        device: torch.device
-    ):
+    def __init__(self):
         """
-        Initialize AttendShowTell
+        Initialize AttendShowTell.
         """
         super().__init__()
-        self.device = device
 
-        self.encoder = ResnetEncoder(self.device)
-        self.decoder = AttentionLSTMDecoder(self.device)
-
-        self = self.to(device)
+        self.encoder = ResnetEncoder()
+        self.decoder = AttentionLSTMDecoder()
 
     def forward(
         self,
@@ -111,7 +135,6 @@ class ShowAttendTell(torch.nn.Module):
           Shape (batch_size, padded_length, word_embedding_dimension)
         """
         encoder_output = self.encoder(images)
-        encoder_output = encoder_output.to(self.device)
         prediction_tensor = self.decoder(encoder_output, captions)
 
         return prediction_tensor
@@ -134,16 +157,11 @@ class ResnetEncoder(torch.nn.Module):
     ResnetEncoder encodes a given image via a pretrained ResNet101 model.
     """
 
-    def __init__(
-        self,
-        device: torch.device = torch.device("cpu")
-    ):
+    def __init__(self):
         """
         Initialize ResnetEncoder.
         """
         super().__init__()
-
-        self.device = device
 
         # TODO: export to config
         self.input_height = 320
@@ -155,8 +173,6 @@ class ResnetEncoder(torch.nn.Module):
         self.encoder = torch.nn.Sequential(*modules)
 
         self.initialize_parameters()
-
-        self.to(device)
 
     def initialize_parameters(self) -> None:
         """
@@ -431,16 +447,11 @@ class AttentionLSTMDecoder(torch.nn.Module):
     See: https://arxiv.org/abs/1502.03044
     """
 
-    def __init__(
-        self,
-        device: torch.device = torch.device("cpu")
-    ):
+    def __init__(self):
         """
         Initialize AttentionLSTMDecoder.
         """
         super().__init__()
-
-        self.device = device
 
         # TODO: config
         self.hidden_dimension = 300
@@ -488,8 +499,6 @@ class AttentionLSTMDecoder(torch.nn.Module):
 
         self.initialize_parameters()
 
-        self.to(device)
-
     def initialize_parameters(self) -> None:
         """
         Initialize parameters.
@@ -533,29 +542,27 @@ class AttentionLSTMDecoder(torch.nn.Module):
         batch_size = encoder_output.size(0)
         channel_length = encoder_output.size(1)
 
-        energy = torch.zeros(
-            [
-                batch_size,
-                channel_length
-            ],
-            dtype=torch.float32
-        ).to(self.device)
+        energies: List[torch.Tensor] = []
 
         # TODO: Check whether this can be optimzed via vectorization.
         for channel in range(channel_length):
-            energy[:, channel] = torch.squeeze(
-                self.energy_function(
-                    torch.cat(
-                        (
-                            encoder_output[:, channel, :].to(self.device),
-                            previous_hidden_state.to(self.device)
-                        ),
-                        dim=1
+            energies.append(
+                torch.squeeze(
+                    self.energy_function(
+                        torch.cat(
+                            (
+                                encoder_output[:, channel, :],
+                                previous_hidden_state
+                            ),
+                            dim=1
+                        )
                     )
                 )
             )
 
-        return torch.nn.functional.softmax(energy, dim=1)
+        energy_vector = torch.stack(energies, dim=1)
+
+        return torch.nn.functional.softmax(energy_vector, dim=1)
 
     def get_context_vector(
         self,
@@ -598,6 +605,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
           Shape: (batch_size, padded_length, vocabulary_size)
         """
         # TODO: Properly implement teacher forcing
+        device = encoder_output.device
         teacher_forcing = True
         batch_size = captions.size(0)
         padded_length = captions.size(1)
@@ -613,6 +621,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
                 self.vocabulary_size
             ],
             dtype=torch.float32
+        ).to(
+            device
         )
         # set first entry of prediction to <s>
         prediction_tensor[:, 0, self.bos_token_id] = 1.
@@ -623,6 +633,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
                 self.hidden_dimension
             ],
             dtype=torch.float32
+        ).to(
+            device
         )
         cell_state_tensor = torch.zeros(
             [
@@ -631,6 +643,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
                 self.hidden_dimension
             ],
             dtype=torch.float32
+        ).to(
+            device
         )
         attention_weight_tensor = torch.zeros(
             [
@@ -639,6 +653,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
                 channel_length
             ],
             dtype=torch.float32
+        ).to(
+            device
         )
         context_tensor = torch.zeros(
             [
@@ -647,6 +663,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
                 self.encoder_output_dimension
             ],
             dtype=torch.float32
+        ).to(
+            device
         )
 
         (
@@ -673,7 +691,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
                     embedded_captions_tensor[:, time_step-1, :]
                 )
             else:
-                # TODO
+                # TODO: implement non teacher forcing
                 raise NotImplementedError(
                     "Disabling teacher forcing isn't implemented, yet"
                 )
