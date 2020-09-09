@@ -3,7 +3,7 @@ DOCKER_CMD=$(shell which docker || which podman || echo "docker")
 PORT=8501
 MODEL_CHECKPOINT_NAME=BEST_checkpoint_flickr8k_1_cap_per_img_1_min_word_freq.pth
 WORD_MAP_CHECKPOINT_NAME=WORDMAP_flickr8k_1_cap_per_img_1_min_word_freq.json
-CONFIG_NAME=config.json
+CONFIG_NAME=config.yaml
 CHECKPOINT_LOCATION=http://tweakstory.stefanmesken.info/checkpoints
 
 .get_checkpoint/%:
