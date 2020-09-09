@@ -12,7 +12,7 @@ from src.app_utils import *
 st.set_option('deprecation.showfileUploaderEncoding', False)
 
 DEMO_IMAGE = './demo/demo_img1.jpg'
-CONFIG_FILE = './ckpts/config.json'
+CONFIG_FILE = './ckpts/config.yaml'
 IS_CUDA = False
 BEAM_SIZE = 10
 SENTENCE_CLASS_MAP = {'Short Caption': 0, 'Mid Caption': 1, 'Long Caption': 2}
