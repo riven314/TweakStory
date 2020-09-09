@@ -1,7 +1,6 @@
-ckpts/*.pth
-ckpts/WORDMAP*.json
-ckpts/config.json
-ckpts/woemojis
+ckpts/*
+
+tags
 
 __pycache__
 */__pycache__
