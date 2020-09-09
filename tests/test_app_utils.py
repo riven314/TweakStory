@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 
 from easydict import EasyDict as edict
-from src.app_utils import read_json
+from src.app_utils import read_json, read_yaml
 from src.app_utils import setup_models, open_image, tfms_image, setup_tokenizer
 from src.app_utils import output_caption
 
@@ -18,9 +18,9 @@ from src.app_utils import output_caption
 @pytest.fixture(scope = 'module')
 def encoder_decoder():
     is_cuda = False
-    cfg_path = './ckpts/config.json'
+    cfg_path = './ckpts/config.yaml'
 
-    cfg = read_json(cfg_path)
+    cfg = read_yaml(cfg_path)
     cfg = edict(cfg)
     
     encoder, decoder = setup_models(cfg, is_cuda = is_cuda)

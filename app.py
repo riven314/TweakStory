@@ -23,7 +23,7 @@ DEFAULT_PADDING = PADDING_CODE * 10
 
 @st.cache(show_spinner = False, allow_output_mutation = True)
 def get_models():
-    cfg = edict(read_json(CONFIG_FILE))
+    cfg = edict(read_yaml(CONFIG_FILE))
     encoder, decoder = setup_models(cfg, is_cuda = False)
     print('model received')
     return encoder, decoder
@@ -38,7 +38,7 @@ def get_tokenizer():
 
 @st.cache(show_spinner = False, allow_output_mutation = True)
 def get_word_maps():
-    cfg = edict(read_json(CONFIG_FILE))
+    cfg = edict(read_yaml(CONFIG_FILE))
     word_map_file = cfg.word_map_file
     word_map = read_json(word_map_file)
     rev_word_map = {v: k for k, v in word_map.items()}
