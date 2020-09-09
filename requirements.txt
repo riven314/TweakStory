@@ -1,10 +1,10 @@
 --find-links https://download.pytorch.org/whl/torch_stable.html
-torch==1.5.0+cpu
+easydict==1.9
+emoji==0.6.0
 numpy==1.19.1
+opencv-python-headless
+pytest==6.0.1
+streamlit==0.64.0
+torch==1.5.0+cpu
 torchvision==0.6.0+cpu
 transformers==2.1.1
-streamlit==0.64.0
-easydict==1.9
-pytest==6.0.1
-opencv-python-headless
-pyyaml==5.3.1
