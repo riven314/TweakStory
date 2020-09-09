@@ -42,8 +42,8 @@ Download the following files and place them into `ckpts` folder
 ## Install and Run in Docker
 Clone the repo and navigate to the repo:
 ```
-git clone https://github.com/namanphy/stylised-controllable-image-captioning-StreamlitApp.git
-cd stylised-controllable-image-captioning-StreamlitApp
+git clone https://github.com/riven314/Controllable-Image-Captioning-App.git
+cd Controllable-Image-Captioning-App
 ```
 
 Build and run the docker image locally:
