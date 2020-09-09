@@ -27,7 +27,7 @@ def read_json(json_path):
 def read_yaml(yaml_path):
     assert yaml_path, f'{yaml_path} not exist'
     with open(yaml_path, 'r') as f:
-        data = yaml.load(f, Loader = yaml.FullLoader)
+        data = yaml.load(f, Loader = yaml.SafeLoader)
     return data
 
 def setup_models(cfg, is_cuda):
