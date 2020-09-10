@@ -2,8 +2,9 @@ app/ckpts/*
 
 **/tags
 
-**/__pycache__
 **/.mypy_cache
+**/__pycache__
+**/venv
 
 .pytest_cache
 .vscode
