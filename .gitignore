@@ -2,6 +2,7 @@ app/ckpts/*
 
 **/tags
 
+**/.cache
 **/.mypy_cache
 **/__pycache__
 **/venv
