@@ -1,10 +1,8 @@
-ckpts/*
+app/ckpts/*
 
-tags
+**/tags
 
-__pycache__
-*/__pycache__
-*/*/__pycache__
+**/__pycache__
 
 .pytest_cache
 .vscode
