@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import yaml
 
 import cv2
 import numpy as np
@@ -22,6 +23,12 @@ def read_json(json_path):
         data = json.load(f)
     return data
 
+
+def read_yaml(yaml_path):
+    assert yaml_path, f'{yaml_path} not exist'
+    with open(yaml_path, 'r') as f:
+        data = yaml.load(f, Loader = yaml.SafeLoader)
+    return data
 
 def setup_models(cfg, is_cuda):
     encoder, decoder = get_encoder_decoder(cfg)
