@@ -16,3 +16,7 @@ IGPreprocessor:
     raw_data_path: ./.cache/data/instagram/ig_sample.tar.gz
     raw_data_url: https://tweakstory.stefanmesken.info/data/ig_sample.tar.gz
     raw_data_directory: ig_sample
+    raw_data_group_names:
+        insta-caption-train.json: train
+        insta-caption-test1.json: eval
+        insta-caption-test2.json: test 
