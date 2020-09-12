@@ -9,22 +9,16 @@ import streamlit as st
 from PIL import Image
 
 from src.app_utils import *
+from src.constants import *
 st.set_option('deprecation.showfileUploaderEncoding', False)
 
-DEMO_IMAGE = './demo/demo_img1.jpg'
-CONFIG_FILE = './ckpts/config.yaml'
-IS_CUDA = False
-BEAM_SIZE = 10
-SENTENCE_CLASS_MAP = {'Short Caption': 0, 'Mid Caption': 1, 'Long Caption': 2}
-EMOJI_CLASS_MAP = {'With Emoji': 1, 'Without Emoji': 0}
-PADDING_CODE = '&nbsp;'
-DEFAULT_PADDING = PADDING_CODE * 10
+app_cfg = edict(read_yaml(CONFIG_FILE))
+model_cfg = edict(app_cfg.model_config)
 
 
 @st.cache(show_spinner = False, allow_output_mutation = True)
 def get_models():
-    cfg = edict(read_yaml(CONFIG_FILE))
-    encoder, decoder = setup_models(cfg, is_cuda = False)
+    encoder, decoder = setup_models(model_cfg, is_cuda = app_cfg.is_cuda)
     print('model received')
     return encoder, decoder
 
@@ -38,8 +32,7 @@ def get_tokenizer():
 
 @st.cache(show_spinner = False, allow_output_mutation = True)
 def get_word_maps():
-    cfg = edict(read_yaml(CONFIG_FILE))
-    word_map_file = cfg.word_map_file
+    word_map_file = model_cfg.word_map_file
     word_map = read_json(word_map_file)
     rev_word_map = {v: k for k, v in word_map.items()}
     print('word map received')
@@ -77,26 +70,27 @@ is_run = st.sidebar.button('RUN')
 
 
 # propagate user input to model run
-img_fn, demo_flag = (img_buffer, False) if img_buffer is not None else (DEMO_IMAGE, True)
+img_fn, demo_flag = (img_buffer, False) if img_buffer is not None else (app_cfg.demo_image, True)
 np_img = open_image(img_fn, demo_flag)
+resized_img = cv2.resize(np_img, (app_cfg.img_resize, app_cfg.img_resize))
 caption = emoji.emojize(f"{DEFAULT_PADDING} :backhand_index_pointing_left: {PADDING_CODE} Press RUN Button to Generate Caption")
 
 if is_run:
-    tensor_img = tfms_image(np_img)
+    tensor_img = tfms_image(resized_img)
     sentence_class = SENTENCE_CLASS_MAP[sentence_class]
     emoji_class = EMOJI_CLASS_MAP[emoji_class]
 
     caption, pred_ids, _ = output_caption(
         encoder, decoder, tensor_img, 
         word_map, rev_word_map, tokenizer, 
-        sentence_class, emoji_class, beam_size = BEAM_SIZE
+        sentence_class, emoji_class, 
+        beam_size = app_cfg.beam_size
     )
     caption = f'{DEFAULT_PADDING} <b>CAPTION</b> {caption}'
 
 
 # display
-h, w, _ = np_img.shape
-np_img = cv2.resize(np_img, (int(h * 2), int(w * 2)))
+np_img = cv2.resize(np_img, (app_cfg.img_display, app_cfg.img_display))
 
 st.image(Image.fromarray(np_img), use_column_width = False)
 st.write('')
