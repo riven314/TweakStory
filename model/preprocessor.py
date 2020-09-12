@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict
 
+import re
 import h5py
 import numpy
 import requests
@@ -30,41 +31,47 @@ class IGPreprocessor(PipelineStep):
         self.config = config[self.__class__.__name__]
         self.force_update = force_update
 
+        raw_data_url = self.config["raw_data_url"]
+        raw_data_path = Path(self.config["raw_data_path"])
+        raw_data_directory = self.config["raw_data_directory"]
+        raw_data_group_names = self.config["raw_data_group_names"]
+        image_directory = raw_data_path.parent / raw_data_directory / "images"
+        json_directory = raw_data_path.parent / raw_data_directory / "json"
+        hdf5_path = raw_data_path.parent / (raw_data_directory + ".hdf5")
+
         self.logger.info(
             f"Initializing {self.__class__.__name__} with config\n" +
             json.dumps(self.config, indent=4) +
             f",\nforce_update = {self.force_update}"
         )
         self.loader = IGLoader(
-            raw_data_url=self.config["raw_data_url"],
-            raw_data_path=Path(self.config["raw_data_path"]),
+            raw_data_url=raw_data_url,
+            raw_data_path=raw_data_path,
             force_update=self.force_update
         )
 
         self.hdf = IGHDF(
+            hdf5_path=hdf5_path,
             raw_data_directory=self.config["raw_data_directory"],
-            image_directory=(
-                Path(
-                    self.config["raw_data_path"]
-                ).parent /
-                self.config["raw_data_directory"] /
-                "images"
-            ),
-            json_directory=(
-                Path(
-                    self.config["raw_data_path"]
-                ).parent /
-                self.config["raw_data_directory"] /
-                "json"
-            ),
-            raw_data_group_names=self.config["raw_data_group_names"],
+            image_directory=image_directory,
+            json_directory=json_directory,
+            raw_data_group_names=raw_data_group_names,
             force_update=self.force_update
+        )
+
+        self.cleaner = IGCaptionCleaner(
+            hdf5_path=hdf5_path,
+            raw_data_directory=raw_data_directory,
+            image_directory=image_directory,
+            raw_data_group_names=raw_data_group_names
+
         )
 
     def run(self) -> None:
         self.logger.info(f"Starting {self.__class__.__name__}")
         self.loader.run()
         self.hdf.run()
+        self.cleaner.run()
 
 
 class IGLoader(PipelineStep):
@@ -112,8 +119,8 @@ class IGLoader(PipelineStep):
             response = requests.get(self.raw_data_url, stream=True)
 
             progress_bar = tqdm(
-                total=int(response.headers.get('content-length', 0)),
-                unit='iB',
+                total=int(response.headers.get("content-length", 0)),
+                unit="iB",
                 unit_scale=True
             )
             with open(self.raw_data_path, "wb") as f:
@@ -149,6 +156,7 @@ class IGHDF(PipelineStep):
 
     def __init__(
         self,
+        hdf5_path: Path,
         raw_data_directory: str,
         image_directory: Path,
         json_directory: Path,
@@ -156,6 +164,7 @@ class IGHDF(PipelineStep):
         force_update: bool = False
     ):
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.hdf5_path = hdf5_path
         self.raw_data_directory = raw_data_directory
         self.image_directory = image_directory
         self.json_directory = json_directory
@@ -164,31 +173,37 @@ class IGHDF(PipelineStep):
 
         self.logger.info(
             f"Initializing {self.__class__.__name__} with\n" +
+            f"hdf5_path = {self.hdf5_path},\n" +
             f"image_directory = {self.image_directory},\n" +
             f"json_directory = {self.json_directory},\n" +
             f"force_update = {self.force_update}"
         )
 
     def run(self) -> None:
-        hdf5_path = (
-            Path(self.image_directory.parent) /
-            (self.raw_data_directory + ".hdf5")
-        )
+        cached = True
 
-        if self.force_update:
-            hdf5_path.unlink(missing_ok=True)
+        if self.force_update and self.hdf5_path.is_file():
+            cached = False
+            with h5py.File(self.hdf5_path, "w") as hdf5_store:
+                del hdf5_store
 
-        if hdf5_path.is_file():
+        if self.hdf5_path.is_file() and cached:
             self.logger.info(
                 "Cached version of hdf5 store already exists. Skipping step."
             )
 
         else:
-            self.logger.info(f"Creating hdf5 store at {hdf5_path}")
+            self.logger.info(f"Creating hdf5 store at {self.hdf5_path}")
 
-            with h5py.File(hdf5_path, "w") as hdf5:
+            with h5py.File(self.hdf5_path, "a") as hdf5_store:
                 for key, value in self.raw_data_group_names.items():
-                    hdf5_group = hdf5.create_group(value)
+                    if value in hdf5_store.keys():
+                        hdf5_store = hdf5_store[value]
+                    else:
+                        hdf5_group = hdf5_store.create_group(
+                            value,
+                            track_order=True
+                        )
                     caption_id = []
                     caption_raw = []
                     with open(self.json_directory / key) as f:
@@ -202,13 +217,151 @@ class IGHDF(PipelineStep):
                         "caption_id",
                         data=numpy.array(
                             caption_id,
-                            dtype=h5py.string_dtype(encoding='utf-8')
+                            dtype=h5py.string_dtype(encoding="utf-8")
                         )
                     )
                     hdf5_group.create_dataset(
                         "caption_raw",
                         data=numpy.array(
                             caption_raw,
-                            dtype=h5py.string_dtype(encoding='utf-8')
+                            dtype=h5py.string_dtype(encoding="utf-8")
                         )
                     )
+
+
+class IGCaptionCleaner(PipelineStep):
+
+    def __init__(
+        self,
+        hdf5_path: Path,
+        raw_data_group_names: Dict[str, str],
+        image_directory: Path,
+        raw_data_directory: str,
+        force_update: bool = False
+
+    ):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.hdf5_path = hdf5_path
+        self.raw_data_directory = raw_data_directory
+        self.image_directory = image_directory
+        self.raw_data_group_names = raw_data_group_names
+        self.force_update = force_update
+
+        self.username_regex = re.compile(r"@([A-Za-z0-9_]|\.[A-Za-z0-9_])+")
+        self.username_placeholder = "@username "
+        self.whitespace_regex = re.compile(r"\s+")
+        self.whitespace_placeholder = " "
+
+        self.logger.info(
+            f"Initializing {self.__class__.__name__} with\n" +
+            f"hdf5_path = {self.hdf5_path}\n" +
+            f"raw_data_group_names = {self.raw_data_group_names}\n" +
+            f"force_update = {self.force_update}\n" +
+            f"username_regex = {self.username_regex}\n" +
+            f"username_placeholder = {self.username_placeholder}\n" +
+            f"normalize_whitespace_regex = {self.whitespace_regex}"
+        )
+
+    def run(self) -> None:
+        # TODO: check whether cache exists
+        self.logger.info(f"Cleaning caption data.")
+        for hdf5_group in self.raw_data_group_names.values():
+            self.anonymize_usernames(
+                input_hdf5_group=hdf5_group,
+                input_hdf5_dataset="caption_raw",
+                output_hdf5_group=hdf5_group,
+                output_hdf5_dataset="caption_cleaned"
+            )
+
+            # normalize_whitespace needs to be the last step
+            self.normalize_whitespace(
+                input_hdf5_group=hdf5_group,
+                input_hdf5_dataset="caption_cleaned",
+                output_hdf5_group=hdf5_group,
+                output_hdf5_dataset="caption_cleaned"
+            )
+
+    def regex_substitution(
+        self,
+        regex: re.Pattern,
+        substitution: str,
+        input_hdf5_group: str,
+        input_hdf5_dataset: str,
+        output_hdf5_group: str,
+        output_hdf5_dataset: str
+    ) -> None:
+        with h5py.File(self.hdf5_path, "a") as hdf5_store:
+            self.logger.info(hdf5_store.keys())
+            captions = numpy.array(
+                hdf5_store.get(
+                    input_hdf5_group
+                ).get(
+                    input_hdf5_dataset
+                )
+            )
+
+            captions_cleaned = []
+
+            for caption in captions:
+                caption_cleaned = re.sub(
+                    regex,
+                    substitution,
+                    caption
+                )
+
+                captions_cleaned.append(caption_cleaned)
+
+            output_group = hdf5_store.require_group(output_hdf5_group)
+            if output_hdf5_dataset in output_group.keys():
+                del output_group[output_hdf5_dataset]
+            output_group.create_dataset(
+                output_hdf5_dataset,
+                data=numpy.array(
+                    captions_cleaned,
+                    dtype=h5py.string_dtype(encoding="utf-8")
+                )
+            )
+
+    def anonymize_usernames(
+        self,
+        input_hdf5_group: str,
+        input_hdf5_dataset: str,
+        output_hdf5_group: str,
+        output_hdf5_dataset: str
+    ) -> None:
+        self.logger.info(
+            "Anonymizing usernames. Data transfer:\n" +
+            f"\"{input_hdf5_group}/{input_hdf5_dataset}\" -> " +
+            f"\"{output_hdf5_group}/{output_hdf5_dataset}\"."
+        )
+
+        self.regex_substitution(
+            self.username_regex,
+            self.username_placeholder,
+            input_hdf5_group,
+            input_hdf5_dataset,
+            output_hdf5_group,
+            output_hdf5_dataset
+        )
+
+    def normalize_whitespace(
+        self,
+        input_hdf5_group: str,
+        input_hdf5_dataset: str,
+        output_hdf5_group: str,
+        output_hdf5_dataset: str
+    ) -> None:
+        self.logger.info(
+            "Normalizing whitespace. Data transfer:\n" +
+            f"\"{input_hdf5_group}/{input_hdf5_dataset}\" -> " +
+            f"\"{output_hdf5_group}/{output_hdf5_dataset}\"."
+        )
+
+        self.regex_substitution(
+            self.whitespace_regex,
+            self.whitespace_placeholder,
+            input_hdf5_group,
+            input_hdf5_dataset,
+            output_hdf5_group,
+            output_hdf5_dataset
+        )
