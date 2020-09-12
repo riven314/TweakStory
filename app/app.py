@@ -14,6 +14,7 @@ st.set_option('deprecation.showfileUploaderEncoding', False)
 
 app_cfg = edict(read_yaml(CONFIG_FILE))
 model_cfg = edict(app_cfg.model_config)
+st.beta_set_page_config(page_title = 'Tweak Story', page_icon = app_cfg.page_icon)
 
 
 @st.cache(show_spinner = False, allow_output_mutation = True)
