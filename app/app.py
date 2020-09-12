@@ -10,11 +10,11 @@ from PIL import Image
 
 from src.app_utils import *
 from src.constants import *
-st.set_option('deprecation.showfileUploaderEncoding', False)
 
 app_cfg = edict(read_yaml(CONFIG_FILE))
 model_cfg = edict(app_cfg.model_config)
 st.beta_set_page_config(page_title = 'Tweak Story', page_icon = app_cfg.page_icon)
+st.set_option('deprecation.showfileUploaderEncoding', False)
 
 
 @st.cache(show_spinner = False, allow_output_mutation = True)
@@ -90,8 +90,17 @@ if is_run:
     caption = f'{DEFAULT_PADDING} <b>CAPTION</b> {caption}'
 
 
-# display
-np_img = cv2.resize(np_img, (app_cfg.img_display, app_cfg.img_display))
+# display image (preserve aspect ratio)
+h, w, _ = np_img.shape
+aspect_ratio = w / h
+
+if w >= h:
+    tgt_w = int(app_cfg.img_display)
+    tgt_h = int(tgt_w / aspect_ratio)
+else:
+    tgt_h = int(app_cfg.img_display)
+    tgt_w = int(tgt_h * aspect_ratio)
+np_img = cv2.resize(np_img, (tgt_w, tgt_h))
 
 st.image(Image.fromarray(np_img), use_column_width = False)
 st.write('')
