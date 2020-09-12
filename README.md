@@ -42,8 +42,8 @@ Download the following files and place them into `ckpts` folder
 ### Install and Run in Docker
 Clone the repo and navigate to the repo:
 ```
-git clone https://github.com/riven314/Controllable-Image-Captioning-App.git
-cd Controllable-Image-Captioning-App
+git clone https://github.com/riven314/TweakStory.git
+cd TweakStory/app
 ```
 
 Build and run the docker image locally:
@@ -61,6 +61,7 @@ make stop
 
 ### Run Unit Test
 ```
+cd TweakStory/app
 pytest -s tests
 ```
 

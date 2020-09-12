@@ -24,10 +24,28 @@ def read_json(json_path):
     return data
 
 
+class Loader(yaml.SafeLoader):
+    def __init__(self, stream):
+
+        self._root = os.path.split(stream.name)[0]
+
+        super(Loader, self).__init__(stream)
+
+    def include(self, node):
+
+        filename = os.path.join(self._root, self.construct_scalar(node))
+
+        with open(filename, 'r') as f:
+            return yaml.load(f, Loader)
+
+# enable PyYAML to handle "!include"
+Loader.add_constructor('!include', Loader.include)
+
+
 def read_yaml(yaml_path):
     assert yaml_path, f'{yaml_path} not exist'
     with open(yaml_path, 'r') as f:
-        data = yaml.load(f, Loader = yaml.SafeLoader)
+        data = yaml.load(f, Loader = Loader)
     return data
 
 def setup_models(cfg, is_cuda):
@@ -60,9 +78,6 @@ def open_image(img_fn, demo_flag):
     if len(img) == 2:
         img = img[:, :, np.newaxis]
         img = np.concatenate([img, img, img], axis = 2)
-    img = cv2.resize(img, (256, 256))
-
-    assert img.shape == (256, 256, 3)
     return img
 
 
