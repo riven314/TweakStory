@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict
 
+import bpemb
 import emoji
 import re
 import h5py
@@ -68,11 +69,17 @@ class IGPreprocessor(PipelineStep):
 
         )
 
+        self.tokenizer = BPTokenizer(
+            hdf5_path=hdf5_path,
+            raw_data_group_names=raw_data_group_names
+        )
+
     def run(self) -> None:
         self.logger.info(f"Starting {self.__class__.__name__}")
         self.loader.run()
         self.hdf.run()
         self.cleaner.run()
+        self.tokenizer.run()
 
 
 class IGLoader(PipelineStep):
@@ -438,3 +445,65 @@ class IGCaptionCleaner(PipelineStep):
                 )
             )
 
+class BPTokenizer(PipelineStep):
+
+    def __init__(
+        self,
+        hdf5_path: Path,
+        raw_data_group_names: Dict[str, str],
+        language: str = "en",
+        vocabulary_size: int = 100_000,
+        embedding_dimensionality: int = 300,
+        force_update: bool = False
+    ):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.hdf5_path=hdf5_path
+        self.raw_data_group_names=raw_data_group_names
+        self.language = language
+        self.vocabulary_size = vocabulary_size
+        self.embedding_dimensionality = embedding_dimensionality
+        self.tokenizer = bpemb.BPEmb(
+            lang=self.language,
+            vs=self.vocabulary_size,
+            dim=self.embedding_dimensionality
+        )
+        self.force_update = force_update
+        self.logger.info(
+            f"Initializing {self.__class__.__name__} with\n" +
+            f"hdf5_path = {self.hdf5_path}\n" +
+            f"raw_data_group_names = {self.raw_data_group_names}\n" +
+            f"language = {self.language}\n" +
+            f"vocabulary_size = {self.vocabulary_size}\n" +
+            f"embedding_dimensionality = {self.embedding_dimensionality}\n" +
+            f"force_update = {self.force_update}"
+        )
+
+    def run(self) -> None:
+        # TODO: check whether cache exists
+        self.logger.info(f"Tokenizing caption data.")
+
+        with h5py.File(self.hdf5_path, "a") as hdf5_store:
+            for hdf5_group_name in self.raw_data_group_names.values():
+                hdf5_group = hdf5_store.get(
+                    hdf5_group_name
+                )
+                captions = numpy.array(
+                    hdf5_group["caption_cleaned"]
+                )
+
+                captions_tokenized = []
+
+                for caption in captions:
+                    caption_tokenized = self.tokenizer.encode(caption)
+                    captions_tokenized.append(caption_tokenized)
+
+                if "caption_cleaned_tokenized" in hdf5_group.keys():
+                    del hdf5_group["caption_cleaned_tokenized"]
+
+                hdf5_group.create_dataset(
+                    "caption_cleaned_tokenized",
+                    data=numpy.array(
+                        captions_tokenized,
+                        dtype=h5py.string_dtype(encoding="utf-8")
+                    )
+                )
