@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict
 
+import emoji
 import re
 import h5py
 import numpy
@@ -273,6 +274,13 @@ class IGCaptionCleaner(PipelineStep):
                 output_hdf5_dataset="caption_cleaned"
             )
 
+            self.encode_emoji(
+                input_hdf5_group=hdf5_group,
+                input_hdf5_dataset="caption_cleaned",
+                output_hdf5_group=hdf5_group,
+                output_hdf5_dataset="caption_cleaned"
+            )
+
             # normalize_whitespace needs to be the last step
             self.normalize_whitespace(
                 input_hdf5_group=hdf5_group,
@@ -365,3 +373,68 @@ class IGCaptionCleaner(PipelineStep):
             output_hdf5_group,
             output_hdf5_dataset
         )
+
+        with h5py.File(self.hdf5_path, "a") as hdf5_store:
+            self.logger.info(hdf5_store.keys())
+            captions = numpy.array(
+                hdf5_store.get(
+                    input_hdf5_group
+                ).get(
+                    input_hdf5_dataset
+                )
+            )
+
+            captions_cleaned = []
+
+            for caption in captions:
+                caption_cleaned = caption.strip()
+                captions_cleaned.append(caption_cleaned)
+
+            output_group = hdf5_store.require_group(output_hdf5_group)
+            if output_hdf5_dataset in output_group.keys():
+                del output_group[output_hdf5_dataset]
+            output_group.create_dataset(
+                output_hdf5_dataset,
+                data=numpy.array(
+                    captions_cleaned,
+                    dtype=h5py.string_dtype(encoding="utf-8")
+                )
+            )
+
+    def encode_emoji(
+        self,
+        input_hdf5_group: str,
+        input_hdf5_dataset: str,
+        output_hdf5_group: str,
+        output_hdf5_dataset: str
+    ) -> None:
+        with h5py.File(self.hdf5_path, "a") as hdf5_store:
+            self.logger.info(hdf5_store.keys())
+            captions = numpy.array(
+                hdf5_store.get(
+                    input_hdf5_group
+                ).get(
+                    input_hdf5_dataset
+                )
+            )
+
+            captions_cleaned = []
+
+            for caption in captions:
+                caption_cleaned = emoji.demojize(
+                    caption,
+                    delimiters=(" :", ": ")
+                )
+                captions_cleaned.append(caption_cleaned)
+
+            output_group = hdf5_store.require_group(output_hdf5_group)
+            if output_hdf5_dataset in output_group.keys():
+                del output_group[output_hdf5_dataset]
+            output_group.create_dataset(
+                output_hdf5_dataset,
+                data=numpy.array(
+                    captions_cleaned,
+                    dtype=h5py.string_dtype(encoding="utf-8")
+                )
+            )
+
