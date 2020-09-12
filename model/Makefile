@@ -1,0 +1,2 @@
+train:
+	python main.py
