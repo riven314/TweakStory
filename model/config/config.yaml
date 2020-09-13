@@ -1,0 +1,22 @@
+logger:
+    version: 1
+    formatters:
+        simple:
+            format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    handlers:
+        console:
+            class: logging.StreamHandler
+            formatter: simple 
+            level: INFO
+    root:
+        level: INFO
+        handlers: [console]
+
+IGPreprocessor:
+    raw_data_path: ./.cache/data/instagram/ig_sample.tar.gz
+    raw_data_url: https://tweakstory.stefanmesken.info/data/ig_sample.tar.gz
+    raw_data_directory: ig_sample
+    raw_data_group_names:
+        insta-caption-train.json: train
+        insta-caption-test1.json: eval
+        insta-caption-test2.json: test 

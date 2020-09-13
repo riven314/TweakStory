@@ -4,7 +4,7 @@ emoji==0.6.0
 numpy==1.19.1
 opencv-python-headless
 pytest==6.0.1
-streamlit==0.64.0
+streamlit==0.66.0
 torch==1.5.0+cpu
 torchvision==0.6.0+cpu
 transformers==2.1.1

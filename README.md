@@ -25,25 +25,25 @@ You can find an online version of [Tweak Story here](https://tweakstory.stefanme
 </div>
 
 
-## Project Structure
-This project has 4 major parts :
+## App Structure
+`app` has 4 major parts :
 1. `app.py` - Main script for launching our Streamlit app
 2. `src` - This folder contains all utility scripts for powering the app
 3. `ckpts` - This folder contains model checkpoint, word map and configuration file for our model
 4. `demo` - This folder contains example images you can try out in our app
 
 
-## Prerequisites
+### Prerequisites (optional)
 Download the following files and place them into `ckpts` folder
 - [model checkpoint](https://drive.google.com/file/d/1EwzENhOilz9bKLIVcz22qn0Ip8wIwwFr/view?usp=sharing)
 - [word map file](https://drive.google.com/file/d/1FW4J2ZB3BQd_7zdxxgjZ63WMbFYm2crn/view?usp=sharing)
 - [configuration file](https://drive.google.com/file/d/1yTtOwbFVDPUE7Jpnlq9aG5y0_jEgd9rS/view?usp=sharing)
 
-## Install and Run in Docker
+### Install and Run in Docker
 Clone the repo and navigate to the repo:
 ```
-git clone https://github.com/riven314/Controllable-Image-Captioning-App.git
-cd Controllable-Image-Captioning-App
+git clone https://github.com/riven314/TweakStory.git
+cd TweakStory/app
 ```
 
 Build and run the docker image locally:
@@ -59,10 +59,15 @@ make stop
 
 *Note : When you'll run the container for the first time it will download a resnet101 model. The Streamlit app is run in CPU.*
 
-## Run Unit Test
+### Run Unit Test
 ```
+cd TweakStory/app
 pytest -s tests
 ```
+
+## Model Structure
+
+TODO
 
 ## About This Project
 This project is a part of [Data Science Incubator (Summer 2020)](https://madewithml.com/incubator/) organized by Made With ML, jointly developed by [Alex Lau](https://madewithml.com/@riven314/) and [Naman Bhardwaj](https://madewithml.com/@namanphy/). We constantly look for better generation quality and deployment strategy. We welcome your contributions and please contact us if you do!
