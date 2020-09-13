@@ -492,13 +492,18 @@ class BPTokenizer(PipelineStep):
                 )
 
                 captions_tokenized = []
+                captions_tokenized_id = []
 
                 for caption in captions:
                     caption_tokenized = self.tokenizer.encode(caption)
+                    caption_tokenized_id = self.tokenizer.encode_ids(caption)
                     captions_tokenized.append(caption_tokenized)
+                    captions_tokenized_id.append(caption_tokenized_id)
 
                 if "caption_cleaned_tokenized" in hdf5_group.keys():
                     del hdf5_group["caption_cleaned_tokenized"]
+                if "caption_cleaned_tokenized_id" in hdf5_group.keys():
+                    del hdf5_group["caption_cleaned_tokenized_id"]
 
                 hdf5_group.create_dataset(
                     "caption_cleaned_tokenized",
@@ -507,3 +512,9 @@ class BPTokenizer(PipelineStep):
                         dtype=h5py.string_dtype(encoding="utf-8")
                     )
                 )
+                token_id_dataset = hdf5_group.create_dataset(
+                    "caption_cleaned_tokenized_id",
+                    shape=(len(captions_tokenized_id),),
+                    dtype=h5py.vlen_dtype(numpy.dtype("int32"))
+                )
+                token_id_dataset[...] = captions_tokenized_id
