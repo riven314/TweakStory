@@ -2,6 +2,8 @@ __pycache__
 */__pycache__
 */*/__pycache__
 
+tags
+
 .pytest_cache
 .vscode
 .idea
