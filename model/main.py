@@ -3,6 +3,7 @@ import logging
 
 from config import config
 from preprocessor import IGPreprocessor
+from trainer import Trainer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -11,8 +12,10 @@ if __name__ == "__main__":
     logging.config.dictConfig(config["logger"])
     print("bla:", args.force_update)
     preprocessor = IGPreprocessor(
-        config,
+        config=config,
         force_update=args.force_update
     )
-
     preprocessor.run()
+
+    trainer = Trainer()
+    trainer.run()

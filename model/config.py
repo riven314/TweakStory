@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import yaml
 
 with open(Path("./config/config.yaml")) as f:
