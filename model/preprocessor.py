@@ -469,8 +469,12 @@ class BPTokenizer(PipelineStep):
                 captions_tokenized_id = []
 
                 for caption in captions:
-                    caption_tokenized = self.tokenizer.encode(caption)
-                    caption_tokenized_id = self.tokenizer.encode_ids(caption)
+                    caption_tokenized = (
+                        self.tokenizer.encode_with_bos_eos(caption)
+                    )
+                    caption_tokenized_id = (
+                        self.tokenizer.encode_ids_with_bos_eos(caption)
+                    )
                     captions_tokenized.append(caption_tokenized)
                     captions_tokenized_id.append(caption_tokenized_id)
 
