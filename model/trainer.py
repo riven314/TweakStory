@@ -1,5 +1,5 @@
 import pathlib
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import bpemb
 import h5py
@@ -12,9 +12,15 @@ from utils import create_pad_collate, log_init
 
 
 class Trainer:
+    """
+    Trainer trains an 'image -> caption' model.
+    """
 
     @log_init
     def __init__(self):
+        """
+        Initialize Trainer.
+        """
         self.dataset = IGDataset()
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -23,33 +29,68 @@ class Trainer:
             num_workers=0,
             collate_fn=create_pad_collate(pad_token_id=0)
         )
-        self.model = Baseline()
+        self.model = ShowAttendTell()
 
     def run(self) -> None:
+        """
+        Run Trainer.
+
+        return: None
+        """
         for x in self.dataloader:
             y = self.model(x)
             print(y)
 
 
-class Baseline(torch.nn.Module):
+class ShowAttendTell(torch.nn.Module):
+    """
+    ShowAttendTell is a 'image -> caption' model.
+
+    See: https://arxiv.org/abs/1502.03044
+    """
 
     def __init__(self):
+        """
+        Initialize AttendShowTell
+        """
         super().__init__()
 
         self.encoder = ResnetEncoder()
-        self.decoder = LSTMDecoder()
+        self.decoder = AttentionLSTMDecoder()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        images, captions = x
+    def forward(
+        self,
+        images_and_captions: Tuple[torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
+        """
+        Run ShowAttendTell on a single batch.
+
+        param images_and_captions: Tuple of images and captions in form of
+          padded tensors of token ids.
+          Shape: (
+            (batch_size, color_channels, height, width),
+            (batch_size, padded_length)
+          )
+
+        return: Tensor containing predicted word vectors.
+          Shape (batch_size, padded_length, word_embedding_dimension)
+        """
+        images, captions = images_and_captions
         encoder_output = self.encoder(images)
-        caption = self.decoder(encoder_output, captions)
+        prediction_tensor = self.decoder(encoder_output, captions)
 
-        return caption
+        return prediction_tensor
 
 
 class ResnetEncoder(torch.nn.Module):
+    """
+    ResnetEncoder encodes a given image via a pretrained ResNet101 model.
+    """
 
     def __init__(self):
+        """
+        Initialize ResnetEncoder.
+        """
         super().__init__()
 
         # TODO: export to config
@@ -65,13 +106,31 @@ class ResnetEncoder(torch.nn.Module):
             parameter.requires_grad = False
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        x = self.encoder(images)
-        x = x.view(x.size(0), -1, x.size(1))
+        """
+        Run ResnetEncoder on a single batch.
 
-        return x
+        :param image: Tensor of input images.
+          Shape: (batch_size, input_height, input_width)
+
+        return: Encoded representation of the given input images.
+          Shape: (batch_size, 100, 2048)
+        """
+        encoder_output = self.encoder(images)
+        encoder_output = encoder_output.view(
+            encoder_output.size(0),
+            -1,
+            encoder_output.size(1)
+        )
+
+        return encoder_output
 
 
 class LSTM(torch.nn.Module):
+    """
+    Custom LSTM cell that takes a context vector as additional input.
+
+    See: https://arxiv.org/abs/1502.03044
+    """
 
     def __init__(
         self,
@@ -81,7 +140,12 @@ class LSTM(torch.nn.Module):
         num_layers: int
     ):
         """
-        TODO
+        Initialize LSTM.
+
+        :param input_size: Dimension of word embeddings.
+        :param hidden_size: Dimension of hidden state.
+        :param context_vector_size: Dimension of context vector.
+        :num_layers: Number of stacked LSTM layers.
         """
         super().__init__()
         self.input_size = input_size
@@ -143,7 +207,28 @@ class LSTM(torch.nn.Module):
         current_context_vector: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        TODO
+        Run LSTM on a single batch.
+
+        :param previous_embedded_caption: Last known word vector.
+          Shape:  (batch_size, word_embedding_dimension)
+        :param previous_hidden_state: Last known hidden state.
+          Shape: (batch_size, hidden_dimension)
+        :param previous_cell_state: Last known cell state.
+          Shape: (batch_size, hidden_dimension)
+        :param current_context_vector: Current context vector.
+          Shape: (batch_size, context_vector_size)
+
+        return: (
+              prediction_vector,
+              current_hidden_state,
+              current_cell_state
+          )
+          prediction_vector is the next predicted word vector.
+            Shape: (batch_size, word_embedding_dimension)
+          current_hidden_state is the current hidden state.
+            Shape: (batch_size, hidden_dimension)
+          current_cell_state is the current cell state.
+            Shape: (batch_size, hidden_dimension)
         """
         combined_vector = torch.cat(
             [
@@ -223,9 +308,17 @@ class LSTM(torch.nn.Module):
         )
 
 
-class LSTMDecoder(torch.nn.Module):
+class AttentionLSTMDecoder(torch.nn.Module):
+    """
+    AttentionLSTMDecoder is an LSTM Vec2Seq decoder with additive attention.
+
+    See: https://arxiv.org/abs/1502.03044
+    """
 
     def __init__(self):
+        """
+        Initialize AttentionLSTMDecoder.
+        """
         super().__init__()
 
         # TODO: config
@@ -278,12 +371,19 @@ class LSTMDecoder(torch.nn.Module):
         previous_hidden_state: torch.Tensor
     ) -> torch.Tensor:
         """
-        TODO
+        Calculate attention weights.
+
+        :parameter encoder_output: Encoder output.
+          Shape: (batch_size, channel_length, embedding_dimension)
+        :param previous_hidden_state: Last known hidden state.
+          Shape: (batch_size, hidden_dimension)
+
+        return: Attention weights.
+          Shape: (batch_size, channel_length)
         """
         batch_size = encoder_output.size(0)
         channel_length = encoder_output.size(1)
 
-        # TODO: check Einstein summation
         energy = torch.zeros(
             [
                 batch_size,
@@ -291,6 +391,8 @@ class LSTMDecoder(torch.nn.Module):
             ],
             dtype=torch.float32
         )
+
+        # TODO: Check whether this can be optimzed via vectorization.
         for channel in range(channel_length):
             energy[:, channel] = torch.squeeze(
                 self.energy_function(
@@ -303,7 +405,7 @@ class LSTMDecoder(torch.nn.Module):
                     )
                 )
             )
-        # TODO
+
         return torch.nn.functional.softmax(energy, dim=1)
 
     def get_context_vector(
@@ -312,7 +414,15 @@ class LSTMDecoder(torch.nn.Module):
         attention_vector: torch.Tensor
     ) -> torch.Tensor:
         """
-        TODO
+        Calculate context vector.
+
+        :parameter encoder_output: Encoder output.
+          Shape: (batch_size, channel_length, embedding_dimension)
+        :param attention_vector: Attention weights.
+          Shape: (batch_size, channel_length)
+
+        return: Context vector.
+          Shape: (batch_size, embedding_dimension)
         """
         context_vector = torch.einsum(
             "bcf,bcf->bf",
@@ -328,14 +438,17 @@ class LSTMDecoder(torch.nn.Module):
         captions: torch.Tensor
     ) -> torch.Tensor:
         """
+        Run AttentionLSTMDecoder on a single batch.
+
         param encoder_output: Encounter output.
           Shape: (batch_size, channels, feature_dimension)
         param captions: Captions encoded as padded tensors of token ids.
           Shape: (batch_size, padded_length)
 
-        return: TODO
+        return: Tensor containing predicted word vectors.
+          Shape: (batch_size, padded_length, word_embedding_dimension)
         """
-        # TODO
+        # TODO: Properly implement teacher forcing
         teacher_forcing = True
         batch_size = captions.size(0)
         padded_length = captions.size(1)
@@ -455,8 +568,16 @@ class LSTMDecoder(torch.nn.Module):
 
 
 class IGDataset(torch.utils.data.Dataset):
+    """
+    Instagram Dataset.
+
+    See: IntaPIC-1.1M @ https://github.com/cesc-park/attend2u
+    """
 
     def __init__(self):
+        """
+        Initialize IGDataset.
+        """
         super().__init__()
 
         # TODO: config
@@ -494,6 +615,13 @@ class IGDataset(torch.utils.data.Dataset):
         self,
         index: int
     ) -> Tuple[PIL.Image.Image, Optional[numpy.ndarray]]:
+        """
+        Get the i-th item in this dataset.
+
+        :param index: Index of the item to get.
+
+        return: (<image>, <tensor of token ids for caption>)
+        """
         image = PIL.Image.open(
             self.image_directory_path / self.caption_ids[index]
         )
@@ -504,4 +632,9 @@ class IGDataset(torch.utils.data.Dataset):
         return (image, caption_tokenized_id)
 
     def __len__(self) -> int:
+        """
+        Return the size of this dataset.
+
+        return: Size of this dataset.
+        """
         return self.length
