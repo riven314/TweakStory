@@ -108,7 +108,7 @@ class ShowAttendTell(torch.nn.Module):
 
         return prediction_tensor
 
-    def to(*args: Any, **kwargs: Any) -> Any:
+    def to(self, *args: Any, **kwargs: Any) -> Any:
         """
         Move this model to the desired device.
 
@@ -173,7 +173,7 @@ class ResnetEncoder(torch.nn.Module):
 
         return encoder_output
 
-    def to(*args: Any, **kwargs: Any) -> Any:
+    def to(self, *args: Any, **kwargs: Any) -> Any:
         """
         Move this model to the desired device.
 
@@ -692,7 +692,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
 
         return (hidden_state_0, cell_state_0)
 
-    def to(*args: Any, **kwargs: Any) -> Any:
+    def to(self, *args: Any, **kwargs: Any) -> Any:
         """
         Move this model to the desired device.
 
