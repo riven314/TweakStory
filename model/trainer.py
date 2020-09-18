@@ -55,8 +55,8 @@ class Trainer:
         for x in self.dataloader:
             self.optimizer.zero_grad()
             images, captions = x
-            images.to(self.device)
-            captions.to(self.device)
+            images = images.to(self.device)
+            captions = captions.to(self.device)
             prediction = self.model(images, captions)
             loss = 0
             padded_length = captions.size(1)
@@ -107,6 +107,18 @@ class ShowAttendTell(torch.nn.Module):
         prediction_tensor = self.decoder(encoder_output, captions)
 
         return prediction_tensor
+
+    def to(*args: Any, **kwargs: Any) -> Any:
+        """
+        Move this model to the desired device.
+
+        return: Moved version of this model.
+        """
+        self = super().to(*args, **kwargs)
+        self.encoder = self.encoder.to(*args, **kwargs)
+        self.decoder = self.decoder.to(*args, **kwargs)
+
+        return self
 
 
 class ResnetEncoder(torch.nn.Module):
