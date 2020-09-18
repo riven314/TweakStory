@@ -1,5 +1,5 @@
 import pathlib
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import bpemb                                                # type: ignore
 import h5py                                                 # type: ignore
@@ -88,8 +88,8 @@ class ShowAttendTell(torch.nn.Module):
         super().__init__()
         self.device = device
 
-        self.encoder = ResnetEncoder()
-        self.decoder = AttentionLSTMDecoder()
+        self.encoder = ResnetEncoder(self.device)
+        self.decoder = AttentionLSTMDecoder(self.device)
 
         self = self.to(device)
 
@@ -133,11 +133,16 @@ class ResnetEncoder(torch.nn.Module):
     ResnetEncoder encodes a given image via a pretrained ResNet101 model.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        device: torch.device = torch.device("cpu")
+    ):
         """
         Initialize ResnetEncoder.
         """
         super().__init__()
+
+        self.device = device
 
         # TODO: export to config
         self.input_height = 320
@@ -149,6 +154,8 @@ class ResnetEncoder(torch.nn.Module):
         self.encoder = torch.nn.Sequential(*modules)
 
         self.initialize_parameters()
+
+        self.to(device)
 
     def initialize_parameters(self) -> None:
         """
@@ -423,11 +430,16 @@ class AttentionLSTMDecoder(torch.nn.Module):
     See: https://arxiv.org/abs/1502.03044
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        device: torch.device = torch.device("cpu")
+    ):
         """
         Initialize AttentionLSTMDecoder.
         """
         super().__init__()
+
+        self.device = device
 
         # TODO: config
         self.hidden_dimension = 300
@@ -474,6 +486,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
         )
 
         self.initialize_parameters()
+
+        self.to(device)
 
     def initialize_parameters(self) -> None:
         """
@@ -524,7 +538,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
                 channel_length
             ],
             dtype=torch.float32
-        )
+        ).to(self.device)
 
         # TODO: Check whether this can be optimzed via vectorization.
         for channel in range(channel_length):
