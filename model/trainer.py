@@ -37,7 +37,7 @@ class Trainer:
             num_workers=0,
             collate_fn=create_pad_collate(pad_token_id=0)
         )
-        self.model = ShowAttendTell()
+        self.model = ShowAttendTell(device)
         self.model.to(self.device)
         self.criterion = torch.nn.NLLLoss(
             ignore_index=self.unk_token_id,
@@ -78,14 +78,20 @@ class ShowAttendTell(torch.nn.Module):
     See: https://arxiv.org/abs/1502.03044
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        device: torch.device
+    ):
         """
         Initialize AttendShowTell
         """
         super().__init__()
+        self.device = device
 
         self.encoder = ResnetEncoder()
         self.decoder = AttentionLSTMDecoder()
+
+        self = self.to(device)
 
     def forward(
         self,
@@ -104,6 +110,7 @@ class ShowAttendTell(torch.nn.Module):
           Shape (batch_size, padded_length, word_embedding_dimension)
         """
         encoder_output = self.encoder(images)
+        encoder_output = encoder_output.to(self.device)
         prediction_tensor = self.decoder(encoder_output, captions)
 
         return prediction_tensor

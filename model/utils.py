@@ -2,7 +2,7 @@ import functools
 import json
 import logging
 import pathlib
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, List
 
 import torch
 
@@ -43,10 +43,10 @@ def log_run(func: Callable[..., Any]) -> Callable[..., Any]:
 
 def create_pad_collate(
     pad_token_id: int
-) -> Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+) -> Callable[[List[Any]], Any]:
     def pad_collate(
-        batch: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        batch: List[Any]
+    ) -> Any:
         images = []
         captions = []
         for entry in batch:
