@@ -1,5 +1,5 @@
 import pathlib
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import bpemb                                                # type: ignore
 import h5py                                                 # type: ignore
@@ -18,11 +18,17 @@ class Trainer:
     """
 
     @log_init
-    def __init__(self):
+    def __init__(
+        self,
+        device: torch.device = torch.device("cpu")
+    ):
         """
         Initialize Trainer.
+
+        TODO: update
         """
         self.unk_token_id = 0
+        self.device = device
         self.dataset = IGDataset()
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -32,6 +38,7 @@ class Trainer:
             collate_fn=create_pad_collate(pad_token_id=0)
         )
         self.model = ShowAttendTell()
+        self.model.to(self.device)
         self.criterion = torch.nn.NLLLoss(
             ignore_index=self.unk_token_id,
             reduction="mean"
@@ -44,11 +51,13 @@ class Trainer:
 
         return: None
         """
-        torch.autograd.set_detect_anomaly(True)
+
         for x in self.dataloader:
             self.optimizer.zero_grad()
             images, captions = x
-            prediction = self.model(x)
+            images.to(self.device)
+            captions.to(self.device)
+            prediction = self.model(images, captions)
             loss = 0
             padded_length = captions.size(1)
 
@@ -80,22 +89,20 @@ class ShowAttendTell(torch.nn.Module):
 
     def forward(
         self,
-        images_and_captions: Tuple[torch.Tensor, torch.Tensor]
+        images: torch.Tensor,
+        captions: torch.Tensor,
     ) -> torch.Tensor:
         """
         Run ShowAttendTell on a single batch.
 
-        param images_and_captions: Tuple of images and captions in form of
-          padded tensors of token ids.
-          Shape: (
-            (batch_size, color_channels, height, width),
-            (batch_size, padded_length)
-          )
+        param images: Images to be encoded.
+          Shape: (batch_size, color_channels, height, width)
+        param captions: Target captions.
+          Shape: (batch_size, padded_length)
 
         return: Tensor containing predicted word vectors.
           Shape (batch_size, padded_length, word_embedding_dimension)
         """
-        images, captions = images_and_captions
         encoder_output = self.encoder(images)
         prediction_tensor = self.decoder(encoder_output, captions)
 
@@ -135,7 +142,6 @@ class ResnetEncoder(torch.nn.Module):
         for parameter in self.encoder.parameters():
             parameter.requires_grad = False
 
-
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         """
         Run ResnetEncoder on a single batch.
@@ -154,6 +160,17 @@ class ResnetEncoder(torch.nn.Module):
         )
 
         return encoder_output
+
+    def to(*args: Any, **kwargs: Any) -> Any:
+        """
+        Move this model to the desired device.
+
+        return: Moved version of this model.
+        """
+        self = super().to(*args, **kwargs)
+        self.encoder = self.encoder.to(*args, **kwargs)
+
+        return self
 
 
 class LSTM(torch.nn.Module):
@@ -358,6 +375,26 @@ class LSTM(torch.nn.Module):
             current_hidden_state,
             current_cell_state
         )
+
+    def to(self, *args: Any, **kwargs: Any) -> Any:
+        """
+        Move this model to the desired device.
+
+        return: Moved version of this model.
+        """
+        self = super().to(*args, **kwargs)
+        self.input_gate = self.input_gate.to(*args, **kwargs)
+        self.forget_gate = self.forget_gate.to(*args, **kwargs)
+        self.output_gate = self.output_gate.to(*args, **kwargs)
+        self.input_layer = self.input_layer.to(*args, **kwargs)
+        self.context_projection = self.context_projection.to(*args, **kwargs)
+        self.hidden_state_projection = self.hidden_state_projection.to(
+            *args,
+            **kwargs
+        )
+        self.output_projection = self.output_projection.to(*args, **kwargs)
+
+        return self
 
 
 class AttentionLSTMDecoder(torch.nn.Module):
@@ -642,6 +679,21 @@ class AttentionLSTMDecoder(torch.nn.Module):
         )
 
         return (hidden_state_0, cell_state_0)
+
+    def to(*args: Any, **kwargs: Any) -> Any:
+        """
+        Move this model to the desired device.
+
+        return: Moved version of this model.
+        """
+        self = super().to(*args, **kwargs)
+        self.embedding = self.embedding.to(*args, **kwargs)
+        self.lstm = self.lstm.to(*args, **kwargs)
+        self.hidden_initializer = self.hidden_initializer.to(*args, **kwargs)
+        self.cell_initializer = self.cell_initializer.to(*args, **kwargs)
+        self.energy_function = self.energy_function.to(*args, **kwargs)
+
+        return self
 
 
 class IGDataset(torch.utils.data.Dataset):
