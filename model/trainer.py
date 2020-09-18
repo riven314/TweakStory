@@ -1,12 +1,12 @@
 import pathlib
 from typing import Optional, Tuple
 
-import bpemb
-import h5py
-import numpy
-import PIL
+import bpemb                                                # type: ignore
+import h5py                                                 # type: ignore
+import numpy                                                # type: ignore
+import PIL                                                  # type: ignore
 import torch
-import torchvision
+import torchvision                                          # type: ignore
 import re
 
 from utils import create_pad_collate, log_init
@@ -22,6 +22,7 @@ class Trainer:
         """
         Initialize Trainer.
         """
+        self.unk_token_id = 0
         self.dataset = IGDataset()
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -31,6 +32,11 @@ class Trainer:
             collate_fn=create_pad_collate(pad_token_id=0)
         )
         self.model = ShowAttendTell()
+        self.criterion = torch.nn.NLLLoss(
+            ignore_index=self.unk_token_id,
+            reduction="mean"
+        )
+        self.optimizer = torch.optim.Adam(self.model.parameters())
 
     def run(self) -> None:
         """
@@ -38,9 +44,22 @@ class Trainer:
 
         return: None
         """
+        torch.autograd.set_detect_anomaly(True)
         for x in self.dataloader:
-            y = self.model(x)
-            print(y)
+            self.optimizer.zero_grad()
+            images, captions = x
+            prediction = self.model(x)
+            loss = 0
+            padded_length = captions.size(1)
+
+            for index in range(1, padded_length):
+                loss += self.criterion(
+                    prediction[:, index, :],
+                    captions[:, index]
+                )
+
+            loss.backward()
+            print(loss)
 
 
 class ShowAttendTell(torch.nn.Module):
@@ -149,6 +168,7 @@ class LSTM(torch.nn.Module):
         input_size: int,
         hidden_size: int,
         context_vector_size: int,
+        vocabulary_size: int,
         num_layers: int
     ):
         """
@@ -157,12 +177,14 @@ class LSTM(torch.nn.Module):
         :param input_size: Dimension of word embeddings.
         :param hidden_size: Dimension of hidden state.
         :param context_vector_size: Dimension of context vector.
+        :param vocabulary_size: Size of vocabulary.
         :num_layers: Number of stacked LSTM layers.
         """
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.context_vector_size = context_vector_size
+        self.vocabulary_size = vocabulary_size
         self.combined_vector_size = (
             input_size +
             hidden_size +
@@ -208,7 +230,7 @@ class LSTM(torch.nn.Module):
         )
         self.output_projection = torch.nn.Linear(
             in_features=self.input_size,
-            out_features=self.input_size
+            out_features=self.vocabulary_size
         )
 
         self.initialize_parameters()
@@ -225,7 +247,7 @@ class LSTM(torch.nn.Module):
         weight_regex = re.compile(r"^.*\.weight")
         for name, parameter in self.named_parameters():
             if re.match(bias_regex, name):
-                torch.nn.init.constant(parameter, .0)
+                torch.nn.init.constant_(parameter, .0)
             elif re.match(weight_regex, name):
                 torch.nn.init.xavier_normal_(parameter)
             parameter.requires_grad = True
@@ -254,8 +276,8 @@ class LSTM(torch.nn.Module):
               current_hidden_state,
               current_cell_state
           )
-          prediction_vector is the next predicted word vector.
-            Shape: (batch_size, word_embedding_dimension)
+          prediction_vector is the log-likelihood vector of the predicted word.
+            Shape: (batch_size, vocabulary_size)
           current_hidden_state is the current hidden state.
             Shape: (batch_size, hidden_dimension)
           current_cell_state is the current cell state.
@@ -271,42 +293,38 @@ class LSTM(torch.nn.Module):
         )
 
         # shape: (batch_size, hidden_dimension)
-        input_gate_vector = torch.nn.functional.sigmoid(
+        input_gate_vector = torch.sigmoid(
             self.input_gate(
                 combined_vector
             )
         )
 
         # shape: (batch_size, hidden_dimension)
-        forget_gate_vector = torch.nn.functional.sigmoid(
+        forget_gate_vector = torch.sigmoid(
             self.forget_gate(
                 combined_vector
             )
         )
 
         # shape: (batch_size, hidden_dimension)
-        output_gate_vector = torch.nn.functional.sigmoid(
+        output_gate_vector = torch.sigmoid(
             self.output_gate(
                 combined_vector
             )
         )
 
         # shape: (batch_size, hidden_dimension)
-        input_vector = torch.nn.functional.tanh(
+        input_vector = torch.tanh(
             self.input_layer(
                 combined_vector
             )
         )
 
-        # c_{t} = (
-        #           f_{t} <Hadamard product> c_{t-1} +
-        #           i_{t} <Hadamard product> g_{t}
-        # )
         current_cell_state = torch.add(
             torch.einsum(
                 "bh,bh->bh",
                 forget_gate_vector,
-                previous_cell_state
+                previous_cell_state.clone()
             ),
             torch.einsum(
                 "bh,bh->bh",
@@ -319,17 +337,20 @@ class LSTM(torch.nn.Module):
         current_hidden_state = torch.einsum(
             "bh,bh->bh",
             output_gate_vector,
-            torch.nn.functional.tanh(current_cell_state)
+            torch.tanh(current_cell_state)
         )
 
-        prediction_vector = self.output_projection(
-            torch.add(
+        prediction_vector = torch.nn.functional.log_softmax(
+            self.output_projection(
                 torch.add(
-                    previous_embedded_caption,
-                    self.hidden_state_projection(current_hidden_state)
-                ),
-                self.context_projection(current_context_vector)
-            )
+                    torch.add(
+                        previous_embedded_caption,
+                        self.hidden_state_projection(current_hidden_state)
+                    ),
+                    self.context_projection(current_context_vector.clone())
+                )
+            ),
+            dim=1
         )
 
         return (
@@ -377,6 +398,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
             input_size=self.embedding_dimension,
             hidden_size=self.hidden_dimension,
             num_layers=self.number_of_lstm_layers,
+            vocabulary_size=self.vocabulary_size,
             context_vector_size=self.encoder_output_dimension
         )
         self.hidden_initializer = torch.nn.Linear(
@@ -415,7 +437,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
             elif re.match(skip_regex, name):
                 pass
             elif re.match(bias_regex, name):
-                torch.nn.init.constant(parameter, .0)
+                torch.nn.init.constant_(parameter, .0)
                 parameter.requires_grad = True
             elif re.match(weight_regex, name):
                 torch.nn.init.xavier_normal_(parameter)
@@ -501,8 +523,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
         param captions: Captions encoded as padded tensors of token ids.
           Shape: (batch_size, padded_length)
 
-        return: Tensor containing predicted word vectors.
-          Shape: (batch_size, padded_length, word_embedding_dimension)
+        return: Tensor containing log-likelihood vectors for predicted words.
+          Shape: (batch_size, padded_length, vocabulary_size)
         """
         # TODO: Properly implement teacher forcing
         teacher_forcing = True
@@ -517,14 +539,12 @@ class AttentionLSTMDecoder(torch.nn.Module):
             [
                 batch_size,
                 padded_length,
-                self.embedding_dimension
+                self.vocabulary_size
             ],
             dtype=torch.float32
         )
         # set first entry of prediction to <s>
-        prediction_tensor[:, 0, :] = torch.from_numpy(
-            self.tokenizer.vectors[self.bos_token_id]
-        )
+        prediction_tensor[:, 0, self.bos_token_id] = 1.
         hidden_state_tensor = torch.zeros(
             [
                 batch_size,
@@ -582,8 +602,9 @@ class AttentionLSTMDecoder(torch.nn.Module):
                     embedded_captions_tensor[:, time_step-1, :]
                 )
             else:
-                previous_embedded_caption = (
-                    prediction_tensor[:, time_step-1, :]
+                # TODO
+                raise NotImplementedError(
+                    "Disabling teacher forcing isn't implemented, yet"
                 )
 
             (
@@ -613,10 +634,10 @@ class AttentionLSTMDecoder(torch.nn.Module):
          Shape ((batch_size, hidden_dimension), (batch_size, hidden_dimension))
         """
         mean_encoder_output = torch.mean(encoder_output, dim=1)
-        hidden_state_0 = torch.nn.functional.tanh(
+        hidden_state_0 = torch.tanh(
             self.hidden_initializer(mean_encoder_output)
         )
-        cell_state_0 = torch.nn.functional.tanh(
+        cell_state_0 = torch.tanh(
             self.cell_initializer(mean_encoder_output)
         )
 
