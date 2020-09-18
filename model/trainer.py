@@ -546,8 +546,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
                 self.energy_function(
                     torch.cat(
                         (
-                            encoder_output[:, channel, :],
-                            previous_hidden_state
+                            encoder_output[:, channel, :].to(self.device),
+                            previous_hidden_state.to(self.device)
                         ),
                         dim=1
                     )
