@@ -7,6 +7,7 @@ import numpy
 import PIL
 import torch
 import torchvision
+import re
 
 from utils import create_pad_collate, log_init
 
@@ -102,8 +103,19 @@ class ResnetEncoder(torch.nn.Module):
         modules = list(resnet.children())[:-2]
         self.encoder = torch.nn.Sequential(*modules)
 
+        self.initialize_parameters()
+
+    def initialize_parameters(self) -> None:
+        """
+        Initialize parameters.
+
+        Define trainable weights and their initial values.
+
+        return: None
+        """
         for parameter in self.encoder.parameters():
             parameter.requires_grad = False
+
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         """
@@ -198,6 +210,25 @@ class LSTM(torch.nn.Module):
             in_features=self.input_size,
             out_features=self.input_size
         )
+
+        self.initialize_parameters()
+
+    def initialize_parameters(self) -> None:
+        """
+        Initialize parameters.
+
+        Define trainable weights and their initial values.
+
+        return: None
+        """
+        bias_regex = re.compile(r"^.*\.bias$")
+        weight_regex = re.compile(r"^.*\.weight")
+        for name, parameter in self.named_parameters():
+            if re.match(bias_regex, name):
+                torch.nn.init.constant(parameter, .0)
+            elif re.match(weight_regex, name):
+                torch.nn.init.xavier_normal_(parameter)
+            parameter.requires_grad = True
 
     def forward(
         self,
@@ -356,7 +387,6 @@ class AttentionLSTMDecoder(torch.nn.Module):
             in_features=self.encoder_output_dimension,
             out_features=self.hidden_dimension
         )
-
         self.energy_function = torch.nn.Linear(
             in_features=(
                 self.encoder_output_dimension +
@@ -364,6 +394,32 @@ class AttentionLSTMDecoder(torch.nn.Module):
             ),
             out_features=1
         )
+
+        self.initialize_parameters()
+
+    def initialize_parameters(self) -> None:
+        """
+        Initialize parameters.
+
+        Define trainable weights and their initial values.
+
+        return: None
+        """
+        pretrained_regex = re.compile(r"^embedding.*$")
+        skip_regex = re.compile(r"^(lstm|embedding).*$")
+        bias_regex = re.compile(r"^.*\.bias$")
+        weight_regex = re.compile(r"^.*\.weight")
+        for name, parameter in self.named_parameters():
+            if re.match(pretrained_regex, name):
+                parameter.requires_grad = False
+            elif re.match(skip_regex, name):
+                pass
+            elif re.match(bias_regex, name):
+                torch.nn.init.constant(parameter, .0)
+                parameter.requires_grad = True
+            elif re.match(weight_regex, name):
+                torch.nn.init.xavier_normal_(parameter)
+                parameter.requires_grad = True
 
     def get_attention_vector(
         self,
