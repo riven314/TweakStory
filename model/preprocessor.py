@@ -1,18 +1,20 @@
 import json
 import logging
 import logging.config
+import re
 import tarfile
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Pattern
 
 import bpemb
 import emoji
-import re
 import h5py
 import numpy
 import requests
 from tqdm import tqdm
+
+from utils import log_init, log_run
 
 
 class PipelineStep(ABC):
@@ -24,8 +26,10 @@ class PipelineStep(ABC):
 
 class IGPreprocessor(PipelineStep):
 
+    @log_init
     def __init__(
         self,
+        *,
         config: Dict[str, Any],
         force_update: bool = False
     ) -> None:
@@ -41,11 +45,6 @@ class IGPreprocessor(PipelineStep):
         json_directory = raw_data_path.parent / raw_data_directory / "json"
         hdf5_path = raw_data_path.parent / (raw_data_directory + ".hdf5")
 
-        self.logger.info(
-            f"Initializing {self.__class__.__name__} with config\n" +
-            json.dumps(self.config, indent=4) +
-            f",\nforce_update = {self.force_update}"
-        )
         self.loader = IGLoader(
             raw_data_url=raw_data_url,
             raw_data_path=raw_data_path,
@@ -74,6 +73,7 @@ class IGPreprocessor(PipelineStep):
             raw_data_group_names=raw_data_group_names
         )
 
+    @log_run
     def run(self) -> None:
         self.logger.info(f"Starting {self.__class__.__name__}")
         self.loader.run()
@@ -84,8 +84,10 @@ class IGPreprocessor(PipelineStep):
 
 class IGLoader(PipelineStep):
 
+    @log_init
     def __init__(
         self,
+        *,
         raw_data_url: str,
         raw_data_path: Path,
         force_update: bool = False
@@ -95,15 +97,8 @@ class IGLoader(PipelineStep):
         self.raw_data_path = raw_data_path
         self.force_update = force_update
 
-        self.logger.info(
-            f"Initializing {self.__class__.__name__} with\n" +
-            f"raw_data_url = {self.raw_data_url},\n" +
-            f"raw_data_path = {self.raw_data_path},\n" +
-            f"force_update = {self.force_update}"
-        )
-
+    @log_run
     def run(self) -> None:
-        self.logger.info(f"Starting {self.__class__.__name__}")
         self.download_raw_data()
         self.unpack_raw_data()
 
@@ -162,8 +157,10 @@ class IGLoader(PipelineStep):
 
 class IGHDF(PipelineStep):
 
+    @log_init
     def __init__(
         self,
+        *,
         hdf5_path: Path,
         raw_data_directory: str,
         image_directory: Path,
@@ -178,14 +175,6 @@ class IGHDF(PipelineStep):
         self.json_directory = json_directory
         self.raw_data_group_names = raw_data_group_names
         self.force_update = force_update
-
-        self.logger.info(
-            f"Initializing {self.__class__.__name__} with\n" +
-            f"hdf5_path = {self.hdf5_path},\n" +
-            f"image_directory = {self.image_directory},\n" +
-            f"json_directory = {self.json_directory},\n" +
-            f"force_update = {self.force_update}"
-        )
 
     def run(self) -> None:
         cached = True
@@ -239,8 +228,10 @@ class IGHDF(PipelineStep):
 
 class IGCaptionCleaner(PipelineStep):
 
+    @log_init
     def __init__(
         self,
+        *,
         hdf5_path: Path,
         raw_data_group_names: Dict[str, str],
         image_directory: Path,
@@ -259,16 +250,6 @@ class IGCaptionCleaner(PipelineStep):
         self.username_placeholder = "@username "
         self.whitespace_regex = re.compile(r"\s+")
         self.whitespace_placeholder = " "
-
-        self.logger.info(
-            f"Initializing {self.__class__.__name__} with\n" +
-            f"hdf5_path = {self.hdf5_path}\n" +
-            f"raw_data_group_names = {self.raw_data_group_names}\n" +
-            f"force_update = {self.force_update}\n" +
-            f"username_regex = {self.username_regex}\n" +
-            f"username_placeholder = {self.username_placeholder}\n" +
-            f"normalize_whitespace_regex = {self.whitespace_regex}"
-        )
 
     def run(self) -> None:
         # TODO: check whether cache exists
@@ -298,7 +279,7 @@ class IGCaptionCleaner(PipelineStep):
 
     def regex_substitution(
         self,
-        regex: re.Pattern,
+        regex: Pattern,
         substitution: str,
         input_hdf5_group: str,
         input_hdf5_dataset: str,
@@ -445,8 +426,10 @@ class IGCaptionCleaner(PipelineStep):
                 )
             )
 
+
 class BPTokenizer(PipelineStep):
 
+    @log_init
     def __init__(
         self,
         hdf5_path: Path,
@@ -457,8 +440,8 @@ class BPTokenizer(PipelineStep):
         force_update: bool = False
     ):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.hdf5_path=hdf5_path
-        self.raw_data_group_names=raw_data_group_names
+        self.hdf5_path = hdf5_path
+        self.raw_data_group_names = raw_data_group_names
         self.language = language
         self.vocabulary_size = vocabulary_size
         self.embedding_dimensionality = embedding_dimensionality
@@ -468,15 +451,6 @@ class BPTokenizer(PipelineStep):
             dim=self.embedding_dimensionality
         )
         self.force_update = force_update
-        self.logger.info(
-            f"Initializing {self.__class__.__name__} with\n" +
-            f"hdf5_path = {self.hdf5_path}\n" +
-            f"raw_data_group_names = {self.raw_data_group_names}\n" +
-            f"language = {self.language}\n" +
-            f"vocabulary_size = {self.vocabulary_size}\n" +
-            f"embedding_dimensionality = {self.embedding_dimensionality}\n" +
-            f"force_update = {self.force_update}"
-        )
 
     def run(self) -> None:
         # TODO: check whether cache exists
@@ -492,13 +466,22 @@ class BPTokenizer(PipelineStep):
                 )
 
                 captions_tokenized = []
+                captions_tokenized_id = []
 
                 for caption in captions:
-                    caption_tokenized = self.tokenizer.encode(caption)
+                    caption_tokenized = (
+                        self.tokenizer.encode_with_bos_eos(caption)
+                    )
+                    caption_tokenized_id = (
+                        self.tokenizer.encode_ids_with_bos_eos(caption)
+                    )
                     captions_tokenized.append(caption_tokenized)
+                    captions_tokenized_id.append(caption_tokenized_id)
 
                 if "caption_cleaned_tokenized" in hdf5_group.keys():
                     del hdf5_group["caption_cleaned_tokenized"]
+                if "caption_cleaned_tokenized_id" in hdf5_group.keys():
+                    del hdf5_group["caption_cleaned_tokenized_id"]
 
                 hdf5_group.create_dataset(
                     "caption_cleaned_tokenized",
@@ -507,3 +490,9 @@ class BPTokenizer(PipelineStep):
                         dtype=h5py.string_dtype(encoding="utf-8")
                     )
                 )
+                token_id_dataset = hdf5_group.create_dataset(
+                    "caption_cleaned_tokenized_id",
+                    shape=(len(captions_tokenized_id),),
+                    dtype=h5py.vlen_dtype(numpy.dtype("int32"))
+                )
+                token_id_dataset[...] = captions_tokenized_id
