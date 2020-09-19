@@ -1,7 +1,7 @@
 import logging
 import pathlib
 import re
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import bpemb  # type: ignore
 import h5py  # type: ignore
@@ -22,38 +22,86 @@ class Trainer:
     @log_init
     def __init__(
         self,
-        pad_token_id: int = 0,
-        unk_token_id: int = 0,
-        batch_size: int = 16,
-        max_epochs: int = 100,
-        device: torch.device = torch.device("cpu")
+        *,
+        config: Dict[str, Any]
     ):
         """
         Initialize Trainer.
 
-        TODO: update
+        :param config: Configuration of Trainer.
+          Example:
+          {
+              "pad_token_id": 0,
+              "unk_token_id": 0,
+              "batch_size": 16,
+              "max_epochs": 100,
+              "device_name": "cpu",
+              "dataloader_num_workers": 2,
+              "IGDataset": {
+                "cache_location": "./.cache/data/instagram/",
+                "dataset_name": "ig_sample",
+                "split": "train",
+                "image_size": 320,
+                "crop_size": 320,
+                "image_normalization_mean": [
+                  0.485,
+                  0.456,
+                  0.406
+                ],
+                "image_normalization_std": [
+                  0.229,
+                  0.224,
+                  0.225
+                ]
+              },
+              "ShowAttendTell": {
+                "ResnetEncoder": {
+                  "input_height": 320,
+                  "input_width": 320,
+                  "hidden_dim": 300
+                },
+                "AttentionLSTMDecoder": {
+                  "hidden_dimension": 300,
+                  "embedding_dimension": 300,
+                  "vocabulary_size": 100000,
+                  "encoder_output_dimension": 2048,
+                  "number_of_lstm_layers": 1,
+                  "unk_token_id": 0,
+                  "bos_token_id": 1,
+                  "eos_token_id": 2,
+                  "language": "en"
+                }
+              }
+          }
         """
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.batch_size = batch_size
-        self.pad_token_id = pad_token_id
-        self.unk_token_id = unk_token_id
-        self.max_epochs = max_epochs
-        self.device = device
-        self.dataset = IGDataset()
+        self.config = config
+        self.device = torch.device(self.config["device_name"])
+
+        # training data
+        self.dataset = IGDataset(
+            config=self.config.get("IGDataset", {})
+        )
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
-            batch_size=self.batch_size,
+            batch_size=self.config["batch_size"],
             shuffle=True,
-            num_workers=1,
-            collate_fn=create_pad_collate(pad_token_id=self.pad_token_id),
+            num_workers=self.config["dataloader_num_workers"],
+            collate_fn=create_pad_collate(
+                pad_token_id=self.config["pad_token_id"]
+            ),
             pin_memory=True
         )
-        self.model = ShowAttendTell()
+
+        # model
+        self.model = ShowAttendTell(
+            config=self.config["ShowAttendTell"]
+        )
         self.model.to(
             self.device
         )
         self.criterion = torch.nn.NLLLoss(
-            ignore_index=self.unk_token_id,
+            ignore_index=self.config["unk_token_id"],
             reduction="mean"
         ).to(
             self.device
@@ -71,7 +119,7 @@ class Trainer:
         epoch_loss = 0.
         epoch_length = 0
 
-        for epoch in range(1, self.max_epochs + 1):
+        for epoch in range(1, self.config["max_epochs"] + 1):
             epoch_loss = 0.
             epoch_length = 0
             self.logger.info(f"Starting epoch: {epoch}")
@@ -109,14 +157,44 @@ class ShowAttendTell(torch.nn.Module):
     See: https://arxiv.org/abs/1502.03044
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        config: Dict[str, Any]
+    ):
         """
         Initialize AttendShowTell.
+
+        :param config: Configuration of ShowAttendTell.
+          Example:
+          {
+            "ResnetEncoder": {
+              "input_height": 320,
+              "input_width": 320,
+              "hidden_dim": 300
+            },
+            "AttentionLSTMDecoder": {
+              "hidden_dimension": 300,
+              "embedding_dimension": 300,
+              "vocabulary_size": 100000,
+              "encoder_output_dimension": 2048,
+              "number_of_lstm_layers": 1,
+              "unk_token_id": 0,
+              "bos_token_id": 1,
+              "eos_token_id": 2,
+              "language": "en"
+            }
+          }
         """
         super().__init__()
+        self.config = config
 
-        self.encoder = ResnetEncoder()
-        self.decoder = AttentionLSTMDecoder()
+        self.encoder = ResnetEncoder(
+            config=self.config["ResnetEncoder"]
+        )
+        self.decoder = AttentionLSTMDecoder(
+            config=self.config["AttentionLSTMDecoder"]
+        )
 
     def forward(
         self,
@@ -155,18 +233,30 @@ class ShowAttendTell(torch.nn.Module):
 class ResnetEncoder(torch.nn.Module):
     """
     ResnetEncoder encodes a given image via a pretrained ResNet101 model.
+
+    :param config: Configuration of ResnetEncoder.
+      Example:
+       {
+         "input_height": 320,
+         "input_width": 320,
+         "hidden_dim": 300
+       }
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        config: Dict[str, Any]
+    ):
         """
         Initialize ResnetEncoder.
         """
         super().__init__()
+        self.config = config
 
-        # TODO: export to config
-        self.input_height = 320
-        self.input_width = 320
-        self.hidden_dim = 300
+        self.input_height = self.config["input_height"]
+        self.input_width = self.config["input_width"]
+        self.hidden_dim = self.config["hidden_dim"]
 
         resnet = torchvision.models.resnet101(pretrained=True)
         modules = list(resnet.children())[:-2]
@@ -447,52 +537,58 @@ class AttentionLSTMDecoder(torch.nn.Module):
     See: https://arxiv.org/abs/1502.03044
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        config: Dict[str, Any]
+    ):
         """
         Initialize AttentionLSTMDecoder.
+
+        :param config: Configuration of AttentionLSTMDecoder.
+          Example:
+          {
+            "hidden_dimension": 300,
+            "embedding_dimension": 300,
+            "vocabulary_size": 100000,
+            "encoder_output_dimension": 2048,
+            "number_of_lstm_layers": 1,
+            "unk_token_id": 0,
+            "bos_token_id": 1,
+            "eos_token_id": 2,
+            "language": "en"
+          }
         """
         super().__init__()
-
-        # TODO: config
-        self.hidden_dimension = 300
-        self.embedding_dimension = 300
-        self.vocabulary_size = 100_000
-        self.encoder_output_dimension = 2048
-        self.number_of_lstm_layers = 1
-        # <unk> token id (unkown)
-        self.unk_token_id = 0
-        # <s> token id (beginning of sentence)
-        self.bos_token_id = 1
-        # </s> token id (end of sentence)
-        self.eos_token_id = 2
+        self.config = config
 
         self.tokenizer = bpemb.BPEmb(
-            lang="en",
-            vs=self.vocabulary_size,
-            dim=self.embedding_dimension
+            lang=self.config["language"],
+            vs=self.config["vocabulary_size"],
+            dim=self.config["embedding_dimension"]
         )
         self.embedding = torch.nn.Embedding.from_pretrained(
             torch.tensor(self.tokenizer.vectors)
         )
         self.lstm = LSTM(
-            input_size=self.embedding_dimension,
-            hidden_size=self.hidden_dimension,
-            num_layers=self.number_of_lstm_layers,
-            vocabulary_size=self.vocabulary_size,
-            context_vector_size=self.encoder_output_dimension
+            input_size=self.config["embedding_dimension"],
+            hidden_size=self.config["hidden_dimension"],
+            num_layers=self.config["number_of_lstm_layers"],
+            vocabulary_size=self.config["vocabulary_size"],
+            context_vector_size=self.config["encoder_output_dimension"]
         )
         self.hidden_initializer = torch.nn.Linear(
-            in_features=self.encoder_output_dimension,
-            out_features=self.hidden_dimension
+            in_features=self.config["encoder_output_dimension"],
+            out_features=self.config["hidden_dimension"]
         )
         self.cell_initializer = torch.nn.Linear(
-            in_features=self.encoder_output_dimension,
-            out_features=self.hidden_dimension
+            in_features=self.config["encoder_output_dimension"],
+            out_features=self.config["hidden_dimension"]
         )
         self.energy_function = torch.nn.Linear(
             in_features=(
-                self.encoder_output_dimension +
-                self.hidden_dimension
+                self.config["encoder_output_dimension"] +
+                self.config["hidden_dimension"]
             ),
             out_features=1
         )
@@ -539,7 +635,6 @@ class AttentionLSTMDecoder(torch.nn.Module):
         return: Attention weights.
           Shape: (batch_size, channel_length)
         """
-        batch_size = encoder_output.size(0)
         channel_length = encoder_output.size(1)
 
         energies: List[torch.Tensor] = []
@@ -618,19 +713,19 @@ class AttentionLSTMDecoder(torch.nn.Module):
             [
                 batch_size,
                 padded_length,
-                self.vocabulary_size
+                self.config["vocabulary_size"]
             ],
             dtype=torch.float32
         ).to(
             device
         )
         # set first entry of prediction to <s>
-        prediction_tensor[:, 0, self.bos_token_id] = 1.
+        prediction_tensor[:, 0, self.config["bos_token_id"]] = 1.
         hidden_state_tensor = torch.zeros(
             [
                 batch_size,
                 padded_length,
-                self.hidden_dimension
+                self.config["hidden_dimension"]
             ],
             dtype=torch.float32
         ).to(
@@ -640,7 +735,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
             [
                 batch_size,
                 padded_length,
-                self.hidden_dimension
+                self.config["hidden_dimension"]
             ],
             dtype=torch.float32
         ).to(
@@ -660,7 +755,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
             [
                 batch_size,
                 padded_length,
-                self.encoder_output_dimension
+                self.config["encoder_output_dimension"]
             ],
             dtype=torch.float32
         ).to(
@@ -755,30 +850,46 @@ class IGDataset(torch.utils.data.Dataset):
     See: IntaPIC-1.1M @ https://github.com/cesc-park/attend2u
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        config: Dict[str, Any]
+    ):
         """
         Initialize IGDataset.
         """
         super().__init__()
 
         # TODO: config
-        self.hdf5_path = pathlib.Path("./.cache/data/instagram/ig_sample.hdf5")
-        self.image_directory_path = pathlib.Path("./.cache/data/instagram/ig_sample/images")
-        self.split = "train"
+        self.config = config
+        self.hdf5_path = pathlib.Path(
+            self.config["cache_location"] +
+            self.config["dataset_name"] +
+            ".hdf5"
+        )
+        self.image_directory_path = pathlib.Path(
+            self.config["cache_location"] +
+            self.config["dataset_name"] +
+            "/images/"
+        )
         self.image_transformations = torchvision.transforms.Compose(
             [
-                torchvision.transforms.Resize(size=320),
-                torchvision.transforms.CenterCrop(size=320),
+                torchvision.transforms.Resize(
+                    size=self.config["image_size"]
+                ),
+                torchvision.transforms.CenterCrop(
+                    size=self.config["crop_size"]
+                ),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
+                    mean=self.config["image_normalization_mean"],
+                    std=self.config["image_normalization_std"],
                 )
             ]
         )
 
         with h5py.File(self.hdf5_path, "r") as hdf5_store:
-            hdf5_group = hdf5_store.get(self.split)
+            hdf5_group = hdf5_store.get(self.config["split"])
 
             self.caption_ids = numpy.array(
                 hdf5_group["caption_id"]
