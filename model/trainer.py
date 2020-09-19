@@ -68,6 +68,7 @@ class Trainer:
                 )
 
             loss.backward()
+            self.optimizer.step()
             print(loss)
 
 
