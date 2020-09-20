@@ -37,6 +37,7 @@ class IGPreprocessor(PipelineStep):
         self.config = config
         self.force_update = force_update
 
+        self.max_caption_char_length = self.config["max_caption_char_length"]
         self.raw_data_url = self.config["raw_data_url"]
         self.raw_data_path = Path(self.config["raw_data_path"])
         self.raw_data_directory = self.config["raw_data_directory"]
@@ -68,6 +69,7 @@ class IGPreprocessor(PipelineStep):
             image_directory=self.image_directory,
             json_directory=self.json_directory,
             raw_data_group_names=self.raw_data_group_names,
+            max_caption_char_length=self.max_caption_char_length,
             force_update=self.force_update
         )
 
@@ -177,6 +179,7 @@ class IGHDF(PipelineStep):
         image_directory: Path,
         json_directory: Path,
         raw_data_group_names: Dict[str, str],
+        max_caption_char_length: int,
         force_update: bool = False
     ):
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -185,6 +188,7 @@ class IGHDF(PipelineStep):
         self.image_directory = image_directory
         self.json_directory = json_directory
         self.raw_data_group_names = raw_data_group_names
+        self.max_caption_char_length = max_caption_char_length
         self.force_update = force_update
 
     def run(self) -> None:
@@ -219,8 +223,10 @@ class IGHDF(PipelineStep):
 
                     for user, entry in raw_json.items():
                         for post_id, post in entry.items():
-                            caption_id.append(user + "_@_" + post_id)
-                            caption_raw.append(post["caption"])
+                            caption = post["caption"]
+                            if len(caption) <= self.max_caption_char_length:
+                                caption_id.append(user + "_@_" + post_id)
+                                caption_raw.append(caption)
                     hdf5_group.create_dataset(
                         "caption_id",
                         data=numpy.array(
