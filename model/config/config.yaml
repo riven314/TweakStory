@@ -14,6 +14,9 @@ logger:
 
 IGPreprocessor:
     max_caption_char_length: 140
+    language: "en"
+    vocabulary_size: 10000
+    embedding_dimensionality: 300
     raw_data_path: "./.cache/data/instagram/ig_sample.tar.gz"
     raw_data_url: "https://tweakstory.stefanmesken.info/data/ig_sample.tar.gz"
     raw_data_directory: "ig_sample"

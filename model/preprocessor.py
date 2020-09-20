@@ -83,7 +83,11 @@ class IGPreprocessor(PipelineStep):
 
         self.tokenizer = BPTokenizer(
             hdf5_path=self.hdf5_path,
-            raw_data_group_names=self.raw_data_group_names
+            raw_data_group_names=self.raw_data_group_names,
+            language=self.config["language"],
+            vocabulary_size=self.config["vocabulary_size"],
+            embedding_dimensionality=self.config["embedding_dimensionality"],
+            force_update=self.force_update
         )
 
     @log_run
