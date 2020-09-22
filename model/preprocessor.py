@@ -136,10 +136,11 @@ class IGImageEncoder(PipelineStep):
         self.device_name = device_name
         self.force_update = force_update
 
+        self.device = torch.device(self.device_name)
         self.encoder = ResnetEncoder(
             config=encoder_config
         ).to(
-            torch.device(self.device_name)
+            self.device
         )
         self.image_transformations = get_image_transformations(
             image_transformations_config
@@ -194,7 +195,7 @@ class IGImageEncoder(PipelineStep):
                         if len(image_batch) > 0:
                             image_encoded_batch = self.encoder(
                                 torch.stack(image_batch, dim=0).to(
-                                    self.encoder.device
+                                    self.device
                                 )
                             ).numpy()
                             hdf5_image_encoded[
