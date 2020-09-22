@@ -7,11 +7,11 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Pattern
 
-import PIL  # type: ignore
 import bpemb  # type: ignore
 import emoji
 import h5py  # type: ignore
 import numpy  # type: ignore
+import PIL  # type: ignore
 import requests
 import torch
 from tqdm import tqdm  # type: ignore

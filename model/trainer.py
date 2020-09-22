@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import bpemb  # type: ignore
 import h5py  # type: ignore
 import numpy  # type: ignore
-import PIL  # type: ignore
 import torch
 import torchvision  # type: ignore
 import tqdm  # type: ignore
@@ -127,7 +126,7 @@ class Trainer:
             for x in tqdm.tqdm(self.dataloader):
                 self.optimizer.zero_grad()
                 image_representations, captions = x
-                images_representations = image_representations.to(self.device)
+                image_representations = image_representations.to(self.device)
                 captions = captions.to(self.device)
                 prediction = self.model.decoder(
                     image_representations,

@@ -1,14 +1,13 @@
 import functools
 import json
-import os
 import logging
+import os
 import pathlib
 from typing import Any, Callable, Dict, List
 
+import torch
 import torchvision
 import yaml
-
-import torch
 
 
 class Loader(yaml.SafeLoader):
