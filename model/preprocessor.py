@@ -105,7 +105,6 @@ class IGPreprocessor(PipelineStep):
 
     @log_run
     def run(self) -> None:
-        self.logger.info(f"Starting {self.__class__.__name__}")
         self.loader.run()
         self.hdf.run()
         self.cleaner.run()
@@ -303,6 +302,7 @@ class IGHDF(PipelineStep):
         self.max_caption_char_length = max_caption_char_length
         self.force_update = force_update
 
+    @log_run
     def run(self) -> None:
         cached = True
 
@@ -380,6 +380,7 @@ class IGCaptionCleaner(PipelineStep):
         self.whitespace_regex = re.compile(r"\s+")
         self.whitespace_placeholder = " "
 
+    @log_run
     def run(self) -> None:
         # TODO: check whether cache exists
         self.logger.info(f"Cleaning caption data.")
@@ -579,6 +580,7 @@ class BPTokenizer(PipelineStep):
         )
         self.force_update = force_update
 
+    @log_run
     def run(self) -> None:
         # TODO: check whether cache exists
         self.logger.info(f"Tokenizing caption data.")
