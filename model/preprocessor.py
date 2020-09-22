@@ -240,7 +240,7 @@ class IGLoader(PipelineStep):
             self.logger.info(
                 "Downloading raw data from " +
                 self.raw_data_url +
-                "to " +
+                " to " +
                 str(self.raw_data_path)
             )
             response = requests.get(self.raw_data_url, stream=True)
@@ -524,6 +524,7 @@ class IGCaptionCleaner(PipelineStep):
         output_hdf5_group: str,
         output_hdf5_dataset: str
     ) -> None:
+        self.logger.info("Encoding emoji.")
         with h5py.File(self.hdf5_path, "a") as hdf5_store:
             self.logger.info(hdf5_store.keys())
             captions = numpy.array(
