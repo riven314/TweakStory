@@ -193,7 +193,9 @@ class IGImageEncoder(PipelineStep):
 
                         if len(image_batch) > 0:
                             image_encoded_batch = self.encoder(
-                                torch.stack(image_batch, dim=0)
+                                torch.stack(image_batch, dim=0).to(
+                                    self.encoder.device
+                                )
                             ).numpy()
                             hdf5_image_encoded[
                                 batch_number * self.batch_size:
