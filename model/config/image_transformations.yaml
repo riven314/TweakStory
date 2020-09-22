@@ -1,0 +1,10 @@
+image_size: 320
+crop_size: 320
+image_normalization_mean:
+- 0.485
+- 0.456
+- 0.406
+image_normalization_std:
+- 0.229
+- 0.224
+- 0.225

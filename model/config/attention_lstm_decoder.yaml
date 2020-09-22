@@ -1,0 +1,9 @@
+hidden_dimension: 300
+embedding_dimension: 300
+vocabulary_size: 10000
+encoder_output_dimension: 2048
+number_of_lstm_layers: 1
+unk_token_id: 0
+bos_token_id: 1
+eos_token_id: 2
+language: "en"

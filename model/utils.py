@@ -1,10 +1,33 @@
 import functools
 import json
+import os
 import logging
 import pathlib
 from typing import Any, Callable, Dict, List
 
+import torchvision
+import yaml
+
 import torch
+
+
+class Loader(yaml.SafeLoader):
+    def __init__(self, stream):
+
+        self._root = os.path.split(stream.name)[0]
+
+        super(Loader, self).__init__(stream)
+
+    def include(self, node):
+
+        filename = os.path.join(self._root, self.construct_scalar(node))
+
+        with open(filename, 'r') as f:
+            return yaml.load(f, Loader)
+
+
+# enable PyYAML to handle "!include"
+Loader.add_constructor('!include', Loader.include)
 
 
 class EnrichedEncoder(json.JSONEncoder):
@@ -60,3 +83,23 @@ def create_pad_collate(
         return (images_tensor, captions_padded)
 
     return pad_collate
+
+
+def get_image_transformations(
+    config: Dict[str, Any]
+) -> torchvision.transforms.transforms.Compose:
+    return torchvision.transforms.Compose(
+        [
+            torchvision.transforms.Resize(
+                size=config["image_size"]
+            ),
+            torchvision.transforms.CenterCrop(
+                size=config["crop_size"]
+            ),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(
+                mean=config["image_normalization_mean"],
+                std=config["image_normalization_std"],
+            )
+        ]
+    )

@@ -24,6 +24,10 @@ IGPreprocessor:
         insta-caption-train.json: "train"
         insta-caption-test1.json: "eval"
         insta-caption-test2.json: "test"
+    ResnetEncoder: !include resnet_encoder.yaml
+    image_transformations: !include image_transformations.yaml
+    batch_size: 32
+    device_name: "cpu"
 
 Trainer:
     pad_token_id: 0
@@ -31,36 +35,14 @@ Trainer:
     batch_size: 16
     max_epochs: 100
     device_name: "cpu"
-    dataloader_num_workers: 2
+    dataloader_num_workers: 4
 
     IGDataset:
         cache_location: "./.cache/data/instagram/"
         dataset_name: "ig_sample"
         split: "train"
-        image_size: 320
-        crop_size: 320
-        image_normalization_mean:
-        - 0.485
-        - 0.456
-        - 0.406
-        image_normalization_std:
-        - 0.229
-        - 0.224
-        - 0.225
+        image_transformations: !include image_transformations.yaml
 
     ShowAttendTell:
-        ResnetEncoder:
-            input_height: 320
-            input_width: 320
-            hidden_dim: 300
-
-        AttentionLSTMDecoder:
-            hidden_dimension: 300
-            embedding_dimension: 300
-            vocabulary_size: 100000
-            encoder_output_dimension: 2048
-            number_of_lstm_layers: 1
-            unk_token_id: 0
-            bos_token_id: 1
-            eos_token_id: 2
-            language: "en"
+        ResnetEncoder: !include resnet_encoder.yaml
+        AttentionLSTMDecoder: !include attention_lstm_decoder.yaml

@@ -7,14 +7,17 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Pattern
 
+import PIL  # type: ignore
 import bpemb  # type: ignore
 import emoji
 import h5py  # type: ignore
 import numpy  # type: ignore
 import requests
+import torch
 from tqdm import tqdm  # type: ignore
 
-from utils import log_init, log_run
+from trainer import ResnetEncoder
+from utils import get_image_transformations, log_init, log_run
 
 
 class PipelineStep(ABC):
@@ -90,6 +93,16 @@ class IGPreprocessor(PipelineStep):
             force_update=self.force_update
         )
 
+        self.image_encoder = IGImageEncoder(
+            hdf5_path=self.hdf5_path,
+            image_directory_path=self.image_directory,
+            raw_data_group_names=self.raw_data_group_names,
+            encoder_config=config["ResnetEncoder"],
+            image_transformations_config=config["image_transformations"],
+            batch_size=config["batch_size"],
+            device_name=config["device_name"]
+        )
+
     @log_run
     def run(self) -> None:
         self.logger.info(f"Starting {self.__class__.__name__}")
@@ -97,6 +110,98 @@ class IGPreprocessor(PipelineStep):
         self.hdf.run()
         self.cleaner.run()
         self.tokenizer.run()
+        self.image_encoder.run()
+
+
+class IGImageEncoder(PipelineStep):
+
+    @log_init
+    def __init__(
+        self,
+        *,
+        hdf5_path: Path,
+        image_directory_path: Path,
+        raw_data_group_names: Dict[str, str],
+        encoder_config: Dict[str, Any],
+        image_transformations_config: Dict[str, Any],
+        batch_size: int,
+        device_name: str,
+        force_update: bool = False
+    ):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.hdf5_path = hdf5_path
+        self.image_directory_path = image_directory_path
+        self.raw_data_group_names = raw_data_group_names
+        self.batch_size = batch_size
+        self.device_name = device_name
+        self.force_update = force_update
+
+        self.encoder = ResnetEncoder(
+            config=encoder_config
+        ).to(
+            torch.device(self.device_name)
+        )
+        self.image_transformations = get_image_transformations(
+            image_transformations_config
+        )
+
+    @log_run
+    def run(self) -> None:
+        with h5py.File(self.hdf5_path, "a") as hdf5_store:
+            for key, value in self.raw_data_group_names.items():
+                hdf5_group = hdf5_store[value]
+                hdf5_caption_id = hdf5_group["caption_id"]
+                dataset_length = len(hdf5_caption_id)
+
+                if (
+                    not self.force_update and
+                    "image_encoded" in hdf5_group.keys()
+                ):
+                    self.logger.info(
+                        "Cached version of encoded images for " +
+                        f"split \"{value}\" already exists. " +
+                        "Skipping step."
+                    )
+                else:
+                    self.logger.info(f"Encoding images for split \"{value}\"")
+
+                    if "image_encoded" in hdf5_group.keys():
+                        del hdf5_group["image_encoded"]
+
+                    hdf5_image_encoded = hdf5_group.create_dataset(
+                        "image_encoded",
+                        (dataset_length, 100, 2048)
+                    )
+
+                    for batch_number in tqdm(
+                        range((dataset_length // self.batch_size) + 1)
+                    ):
+                        image_batch = []
+                        for index in range(self.batch_size):
+                            image_index = (
+                                batch_number * self.batch_size + index
+                            )
+                            if image_index < dataset_length:
+                                image = PIL.Image.open(
+                                    self.image_directory_path /
+                                    hdf5_caption_id[image_index]
+                                )
+                                image = self.image_transformations(image)
+                                image_batch.append(
+                                    image
+                                )
+
+                        if len(image_batch) > 0:
+                            image_encoded_batch = self.encoder(
+                                torch.stack(image_batch, dim=0)
+                            ).numpy()
+                            hdf5_image_encoded[
+                                batch_number * self.batch_size:
+                                batch_number * self.batch_size +
+                                len(image_batch),
+                                :,
+                                :
+                            ] = image_encoded_batch
 
 
 class IGLoader(PipelineStep):

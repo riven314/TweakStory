@@ -11,7 +11,7 @@ import torch
 import torchvision  # type: ignore
 import tqdm  # type: ignore
 
-from utils import create_pad_collate, log_init
+from utils import create_pad_collate, get_image_transformations, log_init
 
 
 class Trainer:
@@ -126,10 +126,13 @@ class Trainer:
 
             for x in tqdm.tqdm(self.dataloader):
                 self.optimizer.zero_grad()
-                images, captions = x
-                images = images.to(self.device)
+                image_representations, captions = x
+                images_representations = image_representations.to(self.device)
                 captions = captions.to(self.device)
-                prediction = self.model(images, captions)
+                prediction = self.model.decoder(
+                    image_representations,
+                    captions
+                )
                 loss = 0
                 padded_length = captions.size(1)
 
@@ -872,22 +875,9 @@ class IGDataset(torch.utils.data.Dataset):
             self.config["dataset_name"] +
             "/images/"
         )
-        self.image_transformations = torchvision.transforms.Compose(
-            [
-                torchvision.transforms.Resize(
-                    size=self.config["image_size"]
-                ),
-                torchvision.transforms.CenterCrop(
-                    size=self.config["crop_size"]
-                ),
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize(
-                    mean=self.config["image_normalization_mean"],
-                    std=self.config["image_normalization_std"],
-                )
-            ]
+        self.image_transformations = get_image_transformations(
+            self.config["image_transformations"]
         )
-
         with h5py.File(self.hdf5_path, "r") as hdf5_store:
             hdf5_group = hdf5_store.get(self.config["split"])
 
@@ -906,22 +896,22 @@ class IGDataset(torch.utils.data.Dataset):
     def __getitem__(
         self,
         index: int
-    ) -> Tuple[PIL.Image.Image, Optional[numpy.ndarray]]:
+    ) -> Tuple[torch.Tensor, Optional[torch.LongTensor]]:
         """
         Get the i-th item in this dataset.
 
         :param index: Index of the item to get.
 
-        return: (<image>, <tensor of token ids for caption>)
+        return: (<image representation>, <tensor of token ids for caption>)
         """
-        image = PIL.Image.open(
-            self.image_directory_path / self.caption_ids[index]
-        )
-        image = self.image_transformations(image)
+        with h5py.File(self.hdf5_path, "r") as hdf5_store:
+            hdf5_group = hdf5_store.get(self.config["split"])
+            image_encoded = hdf5_group["image_encoded"]
+            image_representation = torch.Tensor(image_encoded[index, :, :])
 
         caption_tokenized_id = torch.LongTensor(self.token_ids[index])
 
-        return (image, caption_tokenized_id)
+        return (image_representation, caption_tokenized_id)
 
     def __len__(self) -> int:
         """
