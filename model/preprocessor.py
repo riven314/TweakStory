@@ -197,7 +197,7 @@ class IGImageEncoder(PipelineStep):
                                 torch.stack(image_batch, dim=0).to(
                                     self.device
                                 )
-                            ).numpy()
+                            ).cpu().numpy()
                             hdf5_image_encoded[
                                 batch_number * self.batch_size:
                                 batch_number * self.batch_size +
