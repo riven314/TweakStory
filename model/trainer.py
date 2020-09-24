@@ -539,30 +539,21 @@ class AttentionLSTMDecoder(torch.nn.Module):
         return: Attention weights.
           Shape: (batch_size, channel_length)
         """
-        batch_size = encoder_output.size(0)
-        channel_length = encoder_output.size(1)
-
-        energies: List[torch.Tensor] = []
-
-        # TODO: Check whether this can be optimzed via vectorization.
-        for channel in range(channel_length):
-            energies.append(
-                torch.squeeze(
-                    self.energy_function(
-                        torch.cat(
-                            (
-                                encoder_output[:, channel, :],
-                                previous_hidden_state
-                            ),
-                            dim=1
-                        )
+        energy_vector = self.energy_function(
+            torch.cat(
+                (
+                    encoder_output,
+                    previous_hidden_state.unsqueeze(1).expand(
+                        previous_hidden_state.size(0),
+                        encoder_output.size(1),
+                        previous_hidden_state.size(1)
                     )
-                )
+                ),
+                dim=2
             )
+        )
 
-        energy_vector = torch.stack(energies, dim=1)
-
-        return torch.nn.functional.softmax(energy_vector, dim=1)
+        return torch.nn.functional.softmax(energy_vector, dim=1).squeeze(2)
 
     def get_context_vector(
         self,
