@@ -7,12 +7,12 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Pattern
 
-import bpemb
+import bpemb  # type: ignore
 import emoji
-import h5py
-import numpy
+import h5py  # type: ignore
+import numpy  # type: ignore
 import requests
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore
 
 from utils import log_init, log_run
 
@@ -34,43 +34,54 @@ class IGPreprocessor(PipelineStep):
         force_update: bool = False
     ) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.config = config[self.__class__.__name__]
+        self.config = config
         self.force_update = force_update
 
-        raw_data_url = self.config["raw_data_url"]
-        raw_data_path = Path(self.config["raw_data_path"])
-        raw_data_directory = self.config["raw_data_directory"]
-        raw_data_group_names = self.config["raw_data_group_names"]
-        image_directory = raw_data_path.parent / raw_data_directory / "images"
-        json_directory = raw_data_path.parent / raw_data_directory / "json"
-        hdf5_path = raw_data_path.parent / (raw_data_directory + ".hdf5")
+        self.raw_data_url = self.config["raw_data_url"]
+        self.raw_data_path = Path(self.config["raw_data_path"])
+        self.raw_data_directory = self.config["raw_data_directory"]
+        self.raw_data_group_names = self.config["raw_data_group_names"]
+        self.image_directory = (
+            self.raw_data_path.parent /
+            self.raw_data_directory /
+            "images"
+        )
+        self.json_directory = (
+            self.raw_data_path.parent /
+            self.raw_data_directory /
+            "json"
+        )
+        self.hdf5_path = (
+            self.raw_data_path.parent /
+            (self.raw_data_directory + ".hdf5")
+        )
 
         self.loader = IGLoader(
-            raw_data_url=raw_data_url,
-            raw_data_path=raw_data_path,
+            raw_data_url=self.raw_data_url,
+            raw_data_path=self.raw_data_path,
             force_update=self.force_update
         )
 
         self.hdf = IGHDF(
-            hdf5_path=hdf5_path,
+            hdf5_path=self.hdf5_path,
             raw_data_directory=self.config["raw_data_directory"],
-            image_directory=image_directory,
-            json_directory=json_directory,
-            raw_data_group_names=raw_data_group_names,
+            image_directory=self.image_directory,
+            json_directory=self.json_directory,
+            raw_data_group_names=self.raw_data_group_names,
             force_update=self.force_update
         )
 
         self.cleaner = IGCaptionCleaner(
-            hdf5_path=hdf5_path,
-            raw_data_directory=raw_data_directory,
-            image_directory=image_directory,
-            raw_data_group_names=raw_data_group_names
+            hdf5_path=self.hdf5_path,
+            raw_data_directory=self.raw_data_directory,
+            image_directory=self.image_directory,
+            raw_data_group_names=self.raw_data_group_names
 
         )
 
         self.tokenizer = BPTokenizer(
-            hdf5_path=hdf5_path,
-            raw_data_group_names=raw_data_group_names
+            hdf5_path=self.hdf5_path,
+            raw_data_group_names=self.raw_data_group_names
         )
 
     @log_run
@@ -287,7 +298,6 @@ class IGCaptionCleaner(PipelineStep):
         output_hdf5_dataset: str
     ) -> None:
         with h5py.File(self.hdf5_path, "a") as hdf5_store:
-            self.logger.info(hdf5_store.keys())
             captions = numpy.array(
                 hdf5_store.get(
                     input_hdf5_group
@@ -363,7 +373,6 @@ class IGCaptionCleaner(PipelineStep):
         )
 
         with h5py.File(self.hdf5_path, "a") as hdf5_store:
-            self.logger.info(hdf5_store.keys())
             captions = numpy.array(
                 hdf5_store.get(
                     input_hdf5_group
