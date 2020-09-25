@@ -2,8 +2,10 @@ import os
 import time
 import json
 import yaml
+from io import BytesIO
 
 import cv2
+from PIL import Image
 import numpy as np
 from easydict import EasyDict as edict
 
@@ -69,12 +71,11 @@ def setup_tokenizer(word_map):
 
 def open_image(img_fn, demo_flag):
     if demo_flag:
-        img = cv2.imread(img_fn)
+        img = Image.open(img_fn)
     else:
-        img = cv2.imdecode(np.fromstring(img_fn.read(), np.int8), 1)
-    # from pdb import set_trace
-    # set_trace()
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = Image.open(BytesIO(img_fn.read())).convert('RGB')
+    img = np.array(img).astype(np.uint8)
+    
     if len(img) == 2:
         img = img[:, :, np.newaxis]
         img = np.concatenate([img, img, img], axis = 2)
@@ -106,7 +107,7 @@ def output_caption(encoder, decoder, image, word_map, rev_word_map,
 
     # decode and postprocessing
     caption = tokenizer.decode(enc)
-    caption = emoji.emojize(caption)
+    #caption = emoji.emojize(caption)
     caption = caption.replace('[UNK]', '')
     return caption, pred_ids, pred_subwords
 
