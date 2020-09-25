@@ -2,7 +2,7 @@ import datetime
 import logging
 import pathlib
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import bpemb  # type: ignore
 import h5py  # type: ignore
@@ -129,10 +129,11 @@ class Trainer:
 
             for x in tqdm.tqdm(self.dataloader):
                 self.optimizer.zero_grad()
-                images, captions = x
+                images, captions, styles = x
+
                 images = images.to(self.device)
                 captions = captions.to(self.device)
-                prediction = self.model(images, captions)
+                prediction = self.model(images, captions, styles)
                 loss = 0
                 padded_length = captions.size(1)
 
@@ -220,7 +221,8 @@ class ShowAttendTell(torch.nn.Module):
     def forward(
         self,
         images: torch.Tensor,
-        captions: torch.Tensor,
+        captions: torch.LongTensor,
+        styles: torch.LongTensor
     ) -> torch.Tensor:
         """
         Run ShowAttendTell on a single batch.
@@ -229,12 +231,14 @@ class ShowAttendTell(torch.nn.Module):
           Shape: (batch_size, color_channels, height, width)
         param captions: Target captions.
           Shape: (batch_size, padded_length)
+        param captions: Target styles.
+          Shape: (batch_size, 1)
 
         return: Tensor containing predicted word vectors.
           Shape (batch_size, padded_length, word_embedding_dimension)
         """
         encoder_output = self.encoder(images)
-        prediction_tensor = self.decoder(encoder_output, captions)
+        prediction_tensor = self.decoder(encoder_output, captions, styles)
 
         return prediction_tensor
 
@@ -613,6 +617,10 @@ class AttentionLSTMDecoder(torch.nn.Module):
             ),
             out_features=1
         )
+        self.style_embedding = torch.nn.Embedding(
+            num_embeddings=3,
+            embedding_dim=self.config["embedding_dimension"]
+        )
 
         self.initialize_parameters()
 
@@ -699,7 +707,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
     def forward(
         self,
         encoder_output: torch.Tensor,
-        captions: torch.Tensor
+        captions: torch.LongTensor,
+        styles: torch.LongTensor
     ) -> torch.Tensor:
         """
         Run AttentionLSTMDecoder on a single batch.
@@ -708,6 +717,8 @@ class AttentionLSTMDecoder(torch.nn.Module):
           Shape: (batch_size, channels, feature_dimension)
         param captions: Captions encoded as padded tensors of token ids.
           Shape: (batch_size, padded_length)
+        param captions: Caption styles.
+          Shape: (batch_size, 1)
 
         return: Tensor containing log-likelihood vectors for predicted words.
           Shape: (batch_size, padded_length, vocabulary_size)
@@ -721,6 +732,12 @@ class AttentionLSTMDecoder(torch.nn.Module):
 
         # shape: (batch_size, padded_length, word_embedding_dimension)
         embedded_captions_tensor = self.embedding(captions)
+        # first entry of embedding dictates the caption style
+        embedded_captions_tensor[:, 0, :] = self.style_embedding(
+            styles
+        ).squeeze(
+            1
+        )
 
         prediction_tensor = torch.zeros(
             [
@@ -852,6 +869,7 @@ class AttentionLSTMDecoder(torch.nn.Module):
         self.hidden_initializer = self.hidden_initializer.to(*args, **kwargs)
         self.cell_initializer = self.cell_initializer.to(*args, **kwargs)
         self.energy_function = self.energy_function.to(*args, **kwargs)
+        self.style_embedding = self.style_embedding.to(*args, **kwargs)
 
         return self
 
@@ -908,6 +926,10 @@ class IGDataset(torch.utils.data.Dataset):
                 hdf5_group["caption_id"]
             )
 
+            self.caption_lenghts = numpy.array(
+                hdf5_group["caption_length"]
+            )
+
             self.token_ids = numpy.array(
                 hdf5_group["caption_cleaned_tokenized_id"]
             )
@@ -916,16 +938,30 @@ class IGDataset(torch.utils.data.Dataset):
 
         self.length = len(self.caption_ids)
 
+    def get_style(self, caption_length: int) -> torch.LongTensor:
+        style_tensor = torch.LongTensor(1)
+        if caption_length < 5:
+            style_tensor[0] = 0
+        elif caption_length < 10:
+            style_tensor[0] = 1
+        else:
+            style_tensor[0] = 2
+        return style_tensor
+
     def __getitem__(
         self,
         index: int
-    ) -> Tuple[PIL.Image.Image, Optional[numpy.ndarray]]:
+    ) -> Tuple[torch.Tensor, torch.LongTensor, torch.LongTensor]:
         """
         Get the i-th item in this dataset.
 
         :param index: Index of the item to get.
 
-        return: (<image>, <tensor of token ids for caption>)
+        return: (
+                    <image>,
+                    <tensor of token ids for caption>,
+                    <style tensor>
+        )
         """
         image = PIL.Image.open(
             self.image_directory_path / self.caption_ids[index]
@@ -934,7 +970,11 @@ class IGDataset(torch.utils.data.Dataset):
 
         caption_tokenized_id = torch.LongTensor(self.token_ids[index])
 
-        return (image, caption_tokenized_id)
+        caption_length = self.caption_lenghts[index]
+
+        style = self.get_style(caption_length)
+
+        return (image, caption_tokenized_id, style)
 
     def __len__(self) -> int:
         """
