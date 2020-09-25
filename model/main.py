@@ -12,10 +12,12 @@ if __name__ == "__main__":
     logging.config.dictConfig(config["logger"])
     print("bla:", args.force_update)
     preprocessor = IGPreprocessor(
-        config=config,
+        config=config["IGPreprocessor"],
         force_update=args.force_update
     )
     preprocessor.run()
 
-    trainer = Trainer()
+    trainer = Trainer(
+        config=config["Trainer"]
+    )
     trainer.run()
