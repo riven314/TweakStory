@@ -1,3 +1,4 @@
+import datetime
 import logging
 import pathlib
 import re
@@ -76,6 +77,8 @@ class Trainer:
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.config = config
+        self.checkpoint_interval = self.config["checkpoint_interval"]
+        self.model_location = pathlib.Path(self.config["model_location"])
         self.device = torch.device(self.config["device_name"])
 
         # training data
@@ -148,6 +151,22 @@ class Trainer:
             self.logger.info(
                 f"Epoch: {epoch:>4} Training Loss: {epoch_loss:4.2f}"
             )
+
+            if (
+                self.checkpoint_interval > 0 and
+                epoch % self.checkpoint_interval == 0
+            ):
+                self.logger.info("Saving model checkpoint.")
+                self.model_location.mkdir(
+                    parents=True,
+                    exist_ok=True
+                )
+                torch.save(
+                    self.model.state_dict(),
+                    self.model_location /
+                    str(datetime.datetime.now()) /
+                    ".state_dict"
+                )
 
 
 class ShowAttendTell(torch.nn.Module):
