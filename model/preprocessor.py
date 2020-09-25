@@ -461,9 +461,33 @@ class BPTokenizer(PipelineStep):
         )
         self.force_update = force_update
 
+    @log_run
     def run(self) -> None:
-        # TODO: check whether cache exists
-        self.logger.info(f"Tokenizing caption data.")
+        cache_exists = True
+
+        with h5py.File(self.hdf5_path, "a") as hdf5_store:
+            for hdf5_group_name in self.raw_data_group_names.values():
+                if hdf5_group_name not in hdf5_store.keys():
+                    cache_exists = False
+                    break
+
+                hdf5_group = hdf5_store.get(
+                    hdf5_group_name
+                )
+
+                if (
+                    "caption_cleaned_tokenized" not in hdf5_group.keys() or
+                    "caption_cleaned_tokenized_id" not in hdf5_group.keys()
+                ):
+                    cache_exists = False
+                    break
+
+        if cache_exists and not self.force_update:
+            self.logger.info(
+                "Cached version of tokenized data already exists. " +
+                "Skipping tokenization."
+            )
+            return None
 
         with h5py.File(self.hdf5_path, "a") as hdf5_store:
             for hdf5_group_name in self.raw_data_group_names.values():
@@ -477,7 +501,7 @@ class BPTokenizer(PipelineStep):
                 captions_tokenized = []
                 captions_tokenized_id = []
 
-                for caption in captions:
+                for caption in tqdm(captions):
                     caption_tokenized = (
                         self.tokenizer.encode_with_bos_eos(caption)
                     )
