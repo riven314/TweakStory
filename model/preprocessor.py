@@ -68,7 +68,7 @@ class IGPreprocessor(PipelineStep):
 
         self.hdf = IGHDF(
             hdf5_path=self.hdf5_path,
-            raw_data_directory=self.config["raw_data_directory"],
+            raw_data_directory=self.raw_data_directory,
             image_directory=self.image_directory,
             json_directory=self.json_directory,
             raw_data_group_names=self.raw_data_group_names,
@@ -83,6 +83,12 @@ class IGPreprocessor(PipelineStep):
 
         )
 
+        self.metadata = IGMetaData(
+            hdf5_path=self.hdf5_path,
+            raw_data_directory=self.raw_data_directory,
+            raw_data_group_names=self.raw_data_group_names
+        )
+
         self.tokenizer = BPTokenizer(
             hdf5_path=self.hdf5_path,
             raw_data_group_names=self.raw_data_group_names
@@ -94,6 +100,7 @@ class IGPreprocessor(PipelineStep):
         self.loader.run()
         self.hdf.run()
         self.cleaner.run()
+        self.metadata.run()
         self.tokenizer.run()
 
     def cache_exists(self) -> bool:
@@ -566,5 +573,60 @@ class BPTokenizer(PipelineStep):
                 ):
                     return False
                     break
+
+        return True
+
+
+class IGMetaData(PipelineStep):
+
+    @log_init
+    def __init__(
+        self,
+        hdf5_path: Path,
+        raw_data_directory: str,
+        raw_data_group_names: Dict[str, str],
+        force_update: bool = False
+    ):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.hdf5_path = hdf5_path
+        self.raw_data_directory = raw_data_directory
+        self.raw_data_group_names = raw_data_group_names
+        self.force_update = force_update
+
+    @log_run
+    def run(self) -> None:
+        if self.cache_exists() and not self.force_update:
+            self.logger.info(
+                "Cached version of meta data already exists. " +
+                "Skipping step."
+            )
+            return None
+
+        for hdf5_group_name in self.raw_data_group_names.values():
+            with h5py.File(self.hdf5_path, "a") as hdf5_store:
+                hdf5_group = hdf5_store.get(hdf5_group_name)
+                caption_cleaned = hdf5_group["caption_cleaned"]
+                caption_length = [
+                    len(caption.split(" "))
+                    for caption in caption_cleaned
+                ]
+
+                hdf5_group.create_dataset(
+                    "caption_length",
+                    data=numpy.array(
+                        caption_length,
+                        dtype=numpy.dtype("int32")
+                    )
+                )
+
+    def cache_exists(self) -> bool:
+        for hdf5_group_name in self.raw_data_group_names.values():
+            with h5py.File(self.hdf5_path, "a") as hdf5_store:
+                if hdf5_group_name not in hdf5_store.keys():
+                    return False
+
+                hdf5_group = hdf5_store.get(hdf5_group_name)
+                if "caption_length" not in hdf5_group.keys():
+                    return False
 
         return True
