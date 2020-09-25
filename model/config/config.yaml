@@ -28,7 +28,7 @@ Trainer:
     max_epochs: 100
     device_name: "cpu"
     checkpoint_interval: 1
-    model_location: "./cache/model/instagram"
+    model_location: "./cache/model/instagram/"
     dataloader_num_workers: 2
 
     IGDataset:

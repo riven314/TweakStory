@@ -164,8 +164,10 @@ class Trainer:
                 torch.save(
                     self.model.state_dict(),
                     self.model_location /
-                    str(datetime.datetime.now()) /
-                    ".state_dict"
+                    (
+                        datetime.datetime.now().strftime("%Y%m%d_%H%M%S") +
+                        ".state_dict"
+                    )
                 )
 
 
