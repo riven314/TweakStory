@@ -49,14 +49,17 @@ def create_pad_collate(
     ) -> Any:
         images = []
         captions = []
+        styles = []
         for entry in batch:
             images.append(entry[0])
             captions.append(entry[1])
+            styles.append(entry[2])
         images_tensor = torch.stack(images)
+        style_tensor = torch.stack(styles)
         captions_padded = torch.nn.utils.rnn.pad_sequence(
             captions, batch_first=True, padding_value=pad_token_id
         )
 
-        return (images_tensor, captions_padded)
+        return (images_tensor, captions_padded, style_tensor)
 
     return pad_collate
