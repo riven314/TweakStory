@@ -1,3 +1,4 @@
+# TweakStory/api $ pytest -s tests/test_requests.py
 import os
 from base64 import b64encode
 

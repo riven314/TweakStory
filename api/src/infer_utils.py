@@ -1,54 +1,14 @@
-import os
-import time
-import json
-import yaml
-from io import BytesIO
-
-import cv2
-from PIL import Image
 import numpy as np
-from easydict import EasyDict as edict
+from PIL import Image
 
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 
-import emoji
 from transformers import AutoTokenizer
 
 from src.models import get_encoder_decoder
 
-
-def read_json(json_path):
-    assert json_path, f'{json_path} not exist'
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-    return data
-
-
-class Loader(yaml.SafeLoader):
-    def __init__(self, stream):
-
-        self._root = os.path.split(stream.name)[0]
-
-        super(Loader, self).__init__(stream)
-
-    def include(self, node):
-
-        filename = os.path.join(self._root, self.construct_scalar(node))
-
-        with open(filename, 'r') as f:
-            return yaml.load(f, Loader)
-
-# enable PyYAML to handle "!include"
-Loader.add_constructor('!include', Loader.include)
-
-
-def read_yaml(yaml_path):
-    assert yaml_path, f'{yaml_path} not exist'
-    with open(yaml_path, 'r') as f:
-        data = yaml.load(f, Loader = Loader)
-    return data
 
 def setup_models(cfg, is_cuda):
     encoder, decoder = get_encoder_decoder(cfg)
@@ -69,16 +29,6 @@ def setup_tokenizer(word_map):
     return tokenizer
 
 
-def open_image(img_buffer, demo_flag):
-    img = Image.open(img_buffer).convert('RGB')
-    img = np.array(img).astype(np.uint8)
-    
-    if len(img) == 2:
-        img = img[:, :, np.newaxis]
-        img = np.concatenate([img, img, img], axis = 2)
-    return img
-
-
 def tfms_image(img):
     img = img.transpose(2, 0, 1)
     img = torch.FloatTensor(img / 255.)
@@ -90,6 +40,7 @@ def tfms_image(img):
 
 def output_caption(encoder, decoder, image, word_map, rev_word_map, 
                        tokenizer, len_class, emoji_class, beam_size):
+    """  @return: de-emojized caption (e.g. :hugging_face:) """
     device = image.device
     len_class = torch.as_tensor([len_class]).long().to(device)
     emoji_class = torch.as_tensor([emoji_class]).long().to(device)
@@ -104,7 +55,6 @@ def output_caption(encoder, decoder, image, word_map, rev_word_map,
 
     # decode and postprocessing
     caption = tokenizer.decode(enc)
-    caption = emoji.emojize(caption)
     caption = caption.replace('[UNK]', '')
     return caption, pred_ids, pred_subwords
 

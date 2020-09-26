@@ -7,16 +7,16 @@ from base64 import b64encode
 import cv2
 import emoji
 import numpy as np
-import torch
 from PIL import Image
 from easydict import EasyDict as edict
 
 import streamlit as st
 
-from src.app_utils import *
 from src.constants import *
+from src.utils import read_yaml, open_image
 
 app_cfg = edict(read_yaml(CONFIG_FILE))
+
 st.beta_set_page_config(page_title = 'Tweak Story', page_icon = app_cfg.page_icon)
 st.set_option('deprecation.showfileUploaderEncoding', False)
 
@@ -63,8 +63,11 @@ if is_run:
             emoji_class = emoji_class,
             b64_img_str = b64_img_str
         )
+    # TODO: handle exceptions (bad request/ fail connection)
+    # TODO: toggle local mode request/ docker mode request
+    # TODO: handle the case when encoded image string is too big
     res = requests.post(
-            url = 'http://127.0.0.1:8080/inference',
+            url = f'{HOST}:{PORT}{ROUTE}',
             data = json.dumps(body)
         )
             

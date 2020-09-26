@@ -1,6 +1,6 @@
 FROM python:3.6-slim
 
-EXPOSE 8501
+EXPOSE 8080
 
 WORKDIR /app/
 
@@ -11,6 +11,8 @@ COPY requirements.txt .
 
 RUN pip install -r requirements.txt
 
+COPY ./ckpts ./ckpts/
+
 COPY . .
 
-CMD ["streamlit", "run", "app.py"]
+CMD ["uvicorn", "main:app"]
