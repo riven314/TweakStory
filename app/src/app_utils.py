@@ -69,11 +69,8 @@ def setup_tokenizer(word_map):
     return tokenizer
 
 
-def open_image(img_fn, demo_flag):
-    if demo_flag:
-        img = Image.open(img_fn)
-    else:
-        img = Image.open(BytesIO(img_fn.read())).convert('RGB')
+def open_image(img_buffer, demo_flag):
+    img = Image.open(img_buffer).convert('RGB')
     img = np.array(img).astype(np.uint8)
     
     if len(img) == 2:
