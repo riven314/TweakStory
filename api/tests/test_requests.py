@@ -1,9 +1,5 @@
 import os
-import json
-import requests
 from base64 import b64encode
-
-import streamlit as st
 
 from tests.config import *
 
@@ -27,6 +23,6 @@ def test_fastapi_endpoint(test_client):
                     b64_img_str = b64_img_str
                 )
 
-            res = test_client.post(REQUEST_ROUTE, data = json.dumps(body))
+            res = test_client.post(REQUEST_ROUTE, json = body)
             
             assert res.status_code == SUCCESS_CODE
