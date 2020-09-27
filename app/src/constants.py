@@ -1,6 +1,7 @@
 CONFIG_FILE = './config/app_config.yaml'
 
-HOST = 'http://127.0.0.1'
+#HOST = 'http://127.0.0.1' # when API server is local and not in Docker mode
+HOST = 'http://fastapi' # when API server is in Docker mode
 PORT = 8080
 ROUTE = '/inference'
 

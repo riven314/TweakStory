@@ -43,10 +43,10 @@ Download the following files and place them into `ckpts` folder
 Clone the repo and navigate to the repo:
 ```
 git clone https://github.com/riven314/TweakStory.git
-cd TweakStory/app
+cd TweakStory
 ```
 
-Build and run the docker image locally:
+Build and run the docker composed images locally:
 ```
 make run
 ```
@@ -61,8 +61,9 @@ make stop
 
 ### Run Unit Test
 ```
-cd TweakStory/app
-pytest -s tests
+# test FastAPI by TestClient
+cd TweakStory/api
+pytest -s tests/test_requests.py
 ```
 
 ## Model Structure
