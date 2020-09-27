@@ -1,3 +1,4 @@
 demo_image: ./demo/demo_img1.jpg
 page_icon: https://raw.githubusercontent.com/riven314/TweakStory/master/assets/icon.png
 img_display: 512
+max_img_kb: 50

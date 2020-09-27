@@ -14,7 +14,9 @@ from easydict import EasyDict as edict
 import streamlit as st
 
 from src.constants import *
-from src.utils import read_yaml, open_image
+from src.utils import (read_yaml, open_image, query_file_kb,
+                       resize_to_aspect_ratio_and_limit_length, resize_img_bytes)
+
 
 logging.basicConfig(level = logging.INFO)
 logger = logging.getLogger()
@@ -54,12 +56,16 @@ else:
     img_buffer = open(app_cfg.demo_image, 'rb')
     demo_flag = True
 
+img_bytes = img_buffer.read()
+if query_file_kb(img_bytes) >= app_cfg.max_img_kb:
+    img_bytes = resize_img_bytes(img_bytes, app_cfg.img_display)
+
 caption = emoji.emojize(f"{DEFAULT_PADDING} :backhand_index_pointing_left: {PADDING_CODE} Press RUN Button to Generate Caption")
 
 if is_run:
     sentence_class = SENTENCE_CLASS_MAP[sentence_class_str]
     emoji_class = EMOJI_CLASS_MAP[emoji_class_str]
-    b64_img_str = b64encode(img_buffer.read()).decode('ascii')
+    b64_img_str = b64encode(img_bytes).decode('ascii')
     
     body = dict(
             sentence_class = sentence_class,
@@ -69,7 +75,6 @@ if is_run:
 
     try:
         # TODO: toggle different host for local mode v.s. docker mode
-        # TODO: handle the case when encoded image string is too big
         res = requests.post(
                 url = f'{HOST}:{PORT}{ROUTE}',
                 data = json.dumps(body)
@@ -83,17 +88,8 @@ if is_run:
 
 
 # display image (preserve aspect ratio)
-np_img = open_image(img_buffer, demo_flag)
-h, w, _ = np_img.shape
-aspect_ratio = w / h
-
-if w >= h:
-    tgt_w = int(app_cfg.img_display)
-    tgt_h = int(tgt_w / aspect_ratio)
-else:
-    tgt_h = int(app_cfg.img_display)
-    tgt_w = int(tgt_h * aspect_ratio)
-np_img = cv2.resize(np_img, (tgt_w, tgt_h))
+np_img = open_image(img_bytes, demo_flag)
+np_img = resize_to_aspect_ratio_and_limit_length(np_img, app_cfg.img_display)
 
 st.image(Image.fromarray(np_img), use_column_width = False)
 st.write('')
