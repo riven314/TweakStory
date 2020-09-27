@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import logging
 import requests
 from base64 import b64encode
 
@@ -15,6 +16,8 @@ import streamlit as st
 from src.constants import *
 from src.utils import read_yaml, open_image
 
+logging.basicConfig(level = logging.INFO)
+logger = logging.getLogger()
 app_cfg = edict(read_yaml(CONFIG_FILE))
 
 st.beta_set_page_config(page_title = 'Tweak Story', page_icon = app_cfg.page_icon)
@@ -63,16 +66,20 @@ if is_run:
             emoji_class = emoji_class,
             b64_img_str = b64_img_str
         )
-    # TODO: handle exceptions (bad request/ fail connection)
-    # TODO: toggle local mode request/ docker mode request
-    # TODO: handle the case when encoded image string is too big
-    res = requests.post(
-            url = f'{HOST}:{PORT}{ROUTE}',
-            data = json.dumps(body)
-        )
-            
-    caption = emoji.emojize(res.json()['output'])
-    caption = f'{DEFAULT_PADDING} <b>CAPTION</b> {caption}'
+
+    try:
+        # TODO: toggle different host for local mode v.s. docker mode
+        # TODO: handle the case when encoded image string is too big
+        res = requests.post(
+                url = f'{HOST}:{PORT}{ROUTE}',
+                data = json.dumps(body)
+            )
+                
+        caption = emoji.emojize(res.json()['output'])
+        caption = f'{DEFAULT_PADDING} <b>CAPTION</b> {caption}'
+    except:
+        logger.info('error occured when sending requests to API')
+        caption = f'{DEFAULT_PADDING} <b>ERROR</b> Request Error. Retry Again!'
 
 
 # display image (preserve aspect ratio)
