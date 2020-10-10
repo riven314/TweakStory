@@ -1,0 +1,13 @@
+checkpoint_file: ./ckpts/BEST_checkpoint_flickr8k_1_cap_per_img_1_min_word_freq.pth
+word_map_file: ./ckpts/WORDMAP_flickr8k_1_cap_per_img_1_min_word_freq.json
+attention_dim: 512
+emb_dim: 512
+decoder_dim: 1024
+style_dim: 128
+dropout: 0.5
+regularized_decoder:
+    embed_p: 0.1
+    weight_p: 0.4
+    input_p: 0.3
+    output_p: 0.3
+fine_tune_encoder: false
