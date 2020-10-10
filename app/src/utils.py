@@ -7,29 +7,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-
-class Loader(yaml.SafeLoader):
-    def __init__(self, stream):
-        self._root = os.path.split(stream.name)[0]
-
-        super(Loader, self).__init__(stream)
-
-    def include(self, node):
-
-        filename = os.path.join(self._root, self.construct_scalar(node))
-
-        with open(filename, 'r') as f:
-            return yaml.load(f, Loader)
-
-# enable PyYAML to handle "!include"
-Loader.add_constructor('!include', Loader.include)
-
-
-def read_yaml(yaml_path):
-    assert yaml_path, f'{yaml_path} not exist'
-    with open(yaml_path, 'r') as f:
-        data = yaml.load(f, Loader = Loader)
-    return data
+from src.common import read_json, read_yaml
 
 
 def open_image(img_bytes, demo_flag):

@@ -10,7 +10,7 @@ CONFIG_FILE = './config/api_config.yaml'
 # set up model-specific dependencies
 app_cfg = edict(read_yaml(CONFIG_FILE))
 model_cfg = edict(app_cfg.model_config)
-encoder, decoder = setup_models(model_cfg, is_cuda = app_cfg.is_cuda)
+encoder, decoder = setup_models(model_cfg, is_cuda = False)
 word_map = read_json(model_cfg.word_map_file)
 rev_word_map = {v: k for k, v in word_map.items()}
 tokenizer = setup_tokenizer(word_map)

@@ -9,7 +9,7 @@ CHECKPOINT_LOCATION=http://tweakstory.stefanmesken.info/checkpoints
 	test -f ckpts/$* || wget $(CHECKPOINT_LOCATION)/$* -P ckpts/
 
 get_checkpoints: .get_checkpoint/$(MODEL_CHECKPOINT_NAME)\
-	             .get_checkpoint/$(WORD_MAP_CHECKPOINT_NAME)\
+	             .get_checkpoint/$(WORD_MAP_CHECKPOINT_NAME)
 
 build: get_checkpoints
 	$(DOCKER_CMD) build -t $(APP_NAME) .
