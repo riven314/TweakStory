@@ -286,6 +286,7 @@ class IGCaptionCleaner(PipelineStep):
         self.username_placeholder = "@username "
         self.whitespace_regex = re.compile(r"\s+")
         self.whitespace_placeholder = " "
+        self.emoji_regex = emoji.get_emoji_regexp()
 
     @log_run
     def run(self) -> None:
@@ -304,6 +305,14 @@ class IGCaptionCleaner(PipelineStep):
                 output_hdf5_dataset="caption_cleaned"
             )
 
+            self.separate_emoji(
+                input_hdf5_group=hdf5_group,
+                input_hdf5_dataset="caption_cleaned",
+                output_hdf5_group=hdf5_group,
+                output_hdf5_dataset_caption="caption_cleaned_no_emoji",
+                output_hdf5_dataset_emoji="caption_emoji_only"
+            )
+
             self.encode_emoji(
                 input_hdf5_group=hdf5_group,
                 input_hdf5_dataset="caption_cleaned",
@@ -318,6 +327,13 @@ class IGCaptionCleaner(PipelineStep):
                 output_hdf5_group=hdf5_group,
                 output_hdf5_dataset="caption_cleaned"
             )
+            self.normalize_whitespace(
+                input_hdf5_group=hdf5_group,
+                input_hdf5_dataset="caption_cleaned_no_emoji",
+                output_hdf5_group=hdf5_group,
+                output_hdf5_dataset="caption_cleaned_no_emoji"
+            )
+
 
     def cache_exists(self) -> bool:
         for hdf5_group_name in self.raw_data_group_names.values():
@@ -372,6 +388,69 @@ class IGCaptionCleaner(PipelineStep):
                     dtype=h5py.string_dtype(encoding="utf-8")
                 )
             )
+
+    def separate_emoji(
+        self,
+        input_hdf5_group: str,
+        input_hdf5_dataset: str,
+        output_hdf5_group: str,
+        output_hdf5_dataset_caption: str,
+        output_hdf5_dataset_emoji: str
+
+    ) -> None:
+        self.logger.info(
+            "Separation emoji. Data transfer:\n" +
+            f"\"{input_hdf5_group}/{input_hdf5_dataset}\" -> " +
+            f"(\"{output_hdf5_group}/{output_hdf5_dataset_caption}\"," +
+            f"\"{output_hdf5_group}/{output_hdf5_dataset_emoji}\")."
+        )
+
+        # store first occuring emoji of any given caption in a separate dataset
+        with h5py.File(self.hdf5_path, "a") as hdf5_store:
+            captions = numpy.array(
+                hdf5_store.get(
+                    input_hdf5_group
+                ).get(
+                    input_hdf5_dataset
+                )
+            )
+
+            captured_emoji = []
+
+            for caption in captions:
+                emoji_list = re.findall(
+                    self.emoji_regex,
+                    caption
+                )
+
+                if len(emoji_list) > 0:
+                    captured_emoji.append(
+                        emoji.demojize(emoji_list[0])
+                    )
+                else:
+                    captured_emoji.append("")
+
+            output_group = hdf5_store.require_group(output_hdf5_group)
+            if output_hdf5_dataset_emoji in output_group.keys():
+                del output_group[output_hdf5_dataset_emoji]
+            output_group.create_dataset(
+                output_hdf5_dataset_emoji,
+                data=numpy.array(
+                    captured_emoji,
+                    dtype=h5py.string_dtype(encoding="utf-8")
+                )
+            )
+
+        # store a copy of captions with all emoji removed
+        self.regex_substitution(
+            self.emoji_regex,
+            "",
+            input_hdf5_group,
+            input_hdf5_dataset,
+            output_hdf5_group,
+            output_hdf5_dataset_caption
+        )
+
 
     def anonymize_usernames(
         self,
@@ -515,46 +594,73 @@ class BPTokenizer(PipelineStep):
             )
             return None
 
+        for hdf5_group_name in self.raw_data_group_names.values():
+            self.tokenize(
+                input_hdf5_group=hdf5_group_name,
+                input_hdf5_dataset="caption_cleaned",
+                output_hdf5_group=hdf5_group_name,
+                output_hdf5_dataset_tokenized="caption_cleaned_tokenized",
+                output_hdf5_dataset_tokenized_id="caption_cleaned_tokenized_id"
+            )
+            self.tokenize(
+                input_hdf5_group=hdf5_group_name,
+                input_hdf5_dataset="caption_cleaned_no_emoji",
+                output_hdf5_group=hdf5_group_name,
+                output_hdf5_dataset_tokenized=(
+                    "caption_cleaned_no_emoji_tokenized"
+                ),
+                output_hdf5_dataset_tokenized_id=(
+                    "caption_cleaned_no_emoji_tokenized_id"
+                )
+            )
+
+    def tokenize(
+        self,
+        input_hdf5_group: str,
+        input_hdf5_dataset: str,
+        output_hdf5_group: str,
+        output_hdf5_dataset_tokenized: str,
+        output_hdf5_dataset_tokenized_id: str
+    ) -> None:
         with h5py.File(self.hdf5_path, "a") as hdf5_store:
-            for hdf5_group_name in self.raw_data_group_names.values():
-                hdf5_group = hdf5_store.get(
-                    hdf5_group_name
-                )
-                captions = numpy.array(
-                    hdf5_group["caption_cleaned"]
-                )
+            hdf5_group = hdf5_store.get(
+                input_hdf5_group
+            )
+            captions = numpy.array(
+                hdf5_group[input_hdf5_dataset]
+            )
 
-                captions_tokenized = []
-                captions_tokenized_id = []
+            captions_tokenized = []
+            captions_tokenized_id = []
 
-                for caption in tqdm(captions):
-                    caption_tokenized = (
-                        self.tokenizer.encode_with_bos_eos(caption)
-                    )
-                    caption_tokenized_id = (
-                        self.tokenizer.encode_ids_with_bos_eos(caption)
-                    )
-                    captions_tokenized.append(caption_tokenized)
-                    captions_tokenized_id.append(caption_tokenized_id)
-
-                if "caption_cleaned_tokenized" in hdf5_group.keys():
-                    del hdf5_group["caption_cleaned_tokenized"]
-                if "caption_cleaned_tokenized_id" in hdf5_group.keys():
-                    del hdf5_group["caption_cleaned_tokenized_id"]
-
-                hdf5_group.create_dataset(
-                    "caption_cleaned_tokenized",
-                    data=numpy.array(
-                        captions_tokenized,
-                        dtype=h5py.string_dtype(encoding="utf-8")
-                    )
+            for caption in tqdm(captions):
+                caption_tokenized = (
+                    self.tokenizer.encode_with_bos_eos(caption)
                 )
-                token_id_dataset = hdf5_group.create_dataset(
-                    "caption_cleaned_tokenized_id",
-                    shape=(len(captions_tokenized_id),),
-                    dtype=h5py.vlen_dtype(numpy.dtype("int32"))
+                caption_tokenized_id = (
+                    self.tokenizer.encode_ids_with_bos_eos(caption)
                 )
-                token_id_dataset[...] = captions_tokenized_id
+                captions_tokenized.append(caption_tokenized)
+                captions_tokenized_id.append(caption_tokenized_id)
+
+            if output_hdf5_dataset_tokenized in hdf5_group.keys():
+                del hdf5_group[output_hdf5_dataset_tokenized]
+            if output_hdf5_dataset_tokenized_id in hdf5_group.keys():
+                del hdf5_group[output_hdf5_dataset_tokenized_id]
+
+            hdf5_group.create_dataset(
+                output_hdf5_dataset_tokenized,
+                data=numpy.array(
+                    captions_tokenized,
+                    dtype=h5py.string_dtype(encoding="utf-8")
+                )
+            )
+            token_id_dataset = hdf5_group.create_dataset(
+                output_hdf5_dataset_tokenized_id,
+                shape=(len(captions_tokenized_id),),
+                dtype=h5py.vlen_dtype(numpy.dtype("int32"))
+            )
+            token_id_dataset[...] = captions_tokenized_id
 
     def cache_exists(self) -> bool:
         with h5py.File(self.hdf5_path, "a") as hdf5_store:
